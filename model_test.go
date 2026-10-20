@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -32,7 +33,7 @@ func TestBuildTree(t *testing.T) {
 	if roots[0].Display != "same · aaaaaaaa" || roots[1].Display != "same · bbbbbbbb" || !roots[0].Stale || roots[1].Stale {
 		t.Fatal(roots[0], roots[1])
 	}
-	if len(roots[0].Children) != 1 || !roots[0].Children[0].Ask || roots[0].Children[0].Line != "ЖДЁТ: approve" {
+	if len(roots[0].Children) != 1 || !roots[0].Children[0].Ask || roots[0].Children[0].Line != uiWaiting+"approve" {
 		t.Fatal(roots[0])
 	}
 	var ids []string
@@ -111,7 +112,7 @@ func TestHiddenDuplicatePeers(t *testing.T) {
 	if !byID["old"].HiddenDuplicate || byID["new"].HiddenDuplicate {
 		t.Fatal(nodes)
 	}
-	if got := Render(r, s, now, false); !strings.Contains(got, "скрыто 1") || strings.Contains(got, "same · old") {
+	if got := Render(r, s, now, false); !strings.Contains(got, fmt.Sprintf(uiHidden, 1)) || strings.Contains(got, "same · old") {
 		t.Fatal(got)
 	}
 	for _, activity := range []string{"ask", "live", "lanes"} {

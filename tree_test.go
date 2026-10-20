@@ -51,7 +51,7 @@ func TestRenderOrphansHostsAndErrors(t *testing.T) {
 	report.Error = "partial"
 	report.Remote = append(report.Remote, Host{Host: "remote", Sessions: []Row{{SessionID: "remote-a", Product: "codex-peer"}}})
 	got := Render(report, state, now, false)
-	for _, want := range []string{"\n● orphan@macbook", "── office: недоступен (offline)", "── remote", "○ codex · remote-a", "федерация неполная", "partial"} {
+	for _, want := range []string{"\n● orphan@macbook", "── office" + uiUnavailable + "offline)", "── remote", "○ codex · remote-a", uiIncomplete, "partial"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in %s", want, got)
 		}
@@ -127,11 +127,11 @@ func TestRenderRunningBeforeName(t *testing.T) {
 func TestFrameErrorFallbackText(t *testing.T) {
 	_, state, now := fixture(t)
 	got := Frame([]byte("invalid"), []byte("  stderr diagnosis\x1b\n"), errors.New("run diagnosis"), state, now, false)
-	if !strings.Contains(got, "Ошибка roster: stderr diagnosis\n") || strings.Contains(got, "run diagnosis") {
+	if !strings.Contains(got, uiRosterError+"stderr diagnosis\n") || strings.Contains(got, "run diagnosis") {
 		t.Fatalf("stderr fallback: %q", got)
 	}
 	got = Frame([]byte("invalid"), nil, errors.New("run diagnosis"), state, now, false)
-	if !strings.Contains(got, "Ошибка roster: run diagnosis\n") {
+	if !strings.Contains(got, uiRosterError+"run diagnosis\n") {
 		t.Fatalf("run error fallback: %q", got)
 	}
 }

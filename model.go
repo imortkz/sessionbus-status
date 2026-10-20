@@ -13,8 +13,6 @@ type HostTree struct {
 	Nodes []*Node
 }
 
-const noStatus = "нет статуса"
-
 type Activity string
 
 const (
@@ -28,6 +26,7 @@ type Node struct {
 	Activity                          Activity
 	ID, Display, Harness, Model, Line string
 	Name                              string
+	Lane                              bool
 	Ask, Running, Stale               bool
 	Age                               string
 	Children                          []*Node
@@ -119,12 +118,12 @@ func BuildTree(report Report, state State, now time.Time, activity map[string]ti
 			line := cleanText(rec.Status, 120)
 			ask := cleanText(rec.Ask, 120) != ""
 			if ask {
-				line = "ЖДЁТ: " + cleanText(rec.Ask, 120)
+				line = uiWaiting + cleanText(rec.Ask, 120)
 			}
 			if line == "" {
 				line = noStatus
 			}
-			n := &Node{Name: cleanText(row.Name, 120), ID: id, Display: display, Harness: h, Model: cleanText(rec.Model, 120), Line: line, Ask: ask, Running: row.Running, HasAskBelow: hasAsk(id, map[string]bool{})}
+			n := &Node{Lane: row.Kind != "peer", Name: cleanText(row.Name, 120), ID: id, Display: display, Harness: h, Model: cleanText(rec.Model, 120), Line: line, Ask: ask, Running: row.Running, HasAskBelow: hasAsk(id, map[string]bool{})}
 			live := row.Running
 			lanes := false
 			if row.Kind == "peer" {

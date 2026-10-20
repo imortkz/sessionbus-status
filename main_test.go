@@ -45,7 +45,7 @@ func TestRosterTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code != 1 || !strings.Contains(string(data), "Ошибка roster:") || !strings.Contains(string(data), "deadline exceeded") {
+	if code != 1 || !strings.Contains(string(data), strings.TrimSpace(uiRosterError)) || !strings.Contains(string(data), "deadline exceeded") {
 		t.Fatalf("code %d output %q", code, data)
 	}
 	if elapsed < 150*time.Millisecond || elapsed > 2*time.Second {

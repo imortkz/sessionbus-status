@@ -1,6 +1,6 @@
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
-│bus-status · local · 14:32:05 · сборщик: не найден · 🔇                                           │
-│  СЕССИЯ        СТАТУС                                                 ⏱    МОДЕЛЬ         ХАРНЕСС│
+│bus-status · local · 14:32:05 · collector: not found · 🔇                                         │
+│  SESSION       STATUS                                                 AGE  MODEL          HARNESS│
 │◐ ▾ project     busy busy busy busy busy busy busy busy busy busy bus… 1m   opus-5-5       claude │
 │●   └ developer tests tests tests tests tests tests tests tests tests… 5s   glm-5.3        dsh    │
 │                                                                                                  │
@@ -9,12 +9,12 @@
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
-│── история: project ──────────────────────────────────────────────────────────────────────────────│
-│история пуста                                                                                     │
+│── history: project ──────────────────────────────────────────────────────────────────────────────│
+│history is empty                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
-│↑↓ выбор  ←→ свернуть  l лог/история  L лог во весь экран  f все/скрыть  s звук вкл/выкл  q выход │
-│◐ работают lanes                                                                                  │
+│↑↓ select  ←→ collapse/expand  l log/history  L full log  f all/hide  Tab focus  s sound  q quit  │
+│◐ lanes running                                                                                   │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

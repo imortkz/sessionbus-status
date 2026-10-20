@@ -26,23 +26,23 @@ func TestAlertSchedule(t *testing.T) {
 			t.Fatal(got)
 		}
 	}
-	check(now, []AskInfo{old}, "old ждёт: question")
+	check(now, []AskInfo{old}, "old asks: question")
 	check(now.Add(30*time.Second), []AskInfo{old}, "")
-	check(now.Add(35*time.Second), []AskInfo{newer, old}, "new ждёт: new question")
-	check(now.Add(95*time.Second), []AskInfo{newer, old}, "old ждёт: question")
+	check(now.Add(35*time.Second), []AskInfo{newer, old}, "new asks: new question")
+	check(now.Add(95*time.Second), []AskInfo{newer, old}, "old asks: question")
 	a.muted = true
 	check(now.Add(155*time.Second), []AskInfo{old, newer}, "")
 	a.muted = false
 	check(now.Add(156*time.Second), []AskInfo{old, newer}, "")
 	check(now.Add(157*time.Second), nil, "")
-	check(now.Add(158*time.Second), []AskInfo{old}, "old ждёт: question")
+	check(now.Add(158*time.Second), []AskInfo{old}, "old asks: question")
 	// Clearing one ID makes its reappearance new, even while another ask remains.
-	check(now.Add(159*time.Second), []AskInfo{newer}, "new ждёт: new question")
-	check(now.Add(160*time.Second), []AskInfo{newer, old}, "old ждёт: question")
+	check(now.Add(159*time.Second), []AskInfo{newer}, "new asks: new question")
+	check(now.Add(160*time.Second), []AskInfo{newer, old}, "old asks: question")
 	a = Alerts{}
 	a.Tick(now, nil)
 	got := a.Tick(now, []AskInfo{{ID: "z", Display: "z", Since: now}, {ID: "a", Display: "a", Since: now}})
-	if len(got) != 4 || got[1].Body != "a ждёт:" || got[3].Body != "z ждёт:" {
+	if len(got) != 4 || got[1].Body != "a asks:" || got[3].Body != "z asks:" {
 		t.Fatal(got)
 	}
 	a = Alerts{}
@@ -78,7 +78,7 @@ func TestAlertStartupSilent(t *testing.T) {
 		t.Fatal("missing reminder", got)
 	}
 	asks = append(asks, AskInfo{ID: "new", Display: "new", Text: "question"})
-	if got := a.Tick(now.Add(61*time.Second), asks); len(got) != 2 || got[1].Body != "new ждёт: question" {
+	if got := a.Tick(now.Add(61*time.Second), asks); len(got) != 2 || got[1].Body != "new asks: question" {
 		t.Fatal(got)
 	}
 }

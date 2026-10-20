@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/muesli/termenv"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +25,7 @@ func testModel(t *testing.T) (*Model, Report, State, time.Time) {
 	m := newModel(tuiConfig{ctx: context.Background(), statePath: t.TempDir() + "/missing", home: t.TempDir(), groups: "bus-status,test", interval: time.Second, timeout: time.Second, sound: "test.aiff", muted: true})
 	m.now = func() time.Time { return now }
 	m.collectorDecided = true
-	m.collectorMode = "внешний"
+	m.collectorMode = uiCollectorExternal
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m.Update(stateMsg{state: s})
 	m.Update(rosterMsg{report: r})
@@ -40,6 +42,12 @@ func press(m *Model, key string) tea.Cmd {
 		msg = tea.KeyMsg{Type: tea.KeyLeft}
 	case "right":
 		msg = tea.KeyMsg{Type: tea.KeyRight}
+	case "tab":
+		msg = tea.KeyMsg{Type: tea.KeyTab}
+	case "pgup":
+		msg = tea.KeyMsg{Type: tea.KeyPgUp}
+	case "pgdown":
+		msg = tea.KeyMsg{Type: tea.KeyPgDown}
 	case "esc":
 		msg = tea.KeyMsg{Type: tea.KeyEsc}
 	}
@@ -77,7 +85,7 @@ func TestKeysAndLayout(t *testing.T) {
 		t.Fatal(m.pane)
 	}
 	press(m, "esc")
-	if m.pane != "history" {
+	if m.pane != "log" || m.focus != "tree" {
 		t.Fatal(m.pane)
 	}
 	press(m, "s")
@@ -95,7 +103,7 @@ func TestKeysAndLayout(t *testing.T) {
 				t.Fatalf("too wide %d: %q", lipgloss.Width(line), line)
 			}
 		}
-		for _, want := range []string{"bus-status", "сборщик:", "↑↓", "←→", "l ", "L ", "f ", "s ", "q "} {
+		for _, want := range []string{"bus-status", uiCollector, "↑↓", "←→", "l ", "L ", "f ", "s ", "q "} {
 			if !strings.Contains(v, want) {
 				t.Fatalf("missing %q: %s", want, v)
 			}
@@ -125,13 +133,13 @@ func TestVisibleOutput(t *testing.T) {
 	m.Update(stateMsg{state: s})
 	press(m, "down")
 	v := stripANSI(m.View())
-	if !strings.Contains(v, "history") || !strings.Contains(v, "история: developer") {
+	if !strings.Contains(v, "history") || !strings.Contains(v, uiHistory+"developer") {
 		t.Fatal(v)
 	}
 	press(m, "l")
 	m.Update(logMsg{gen: m.generation, lines: []LogLine{{Kind: "TEXT", Text: "log\x1b\u202e\u200b"}}})
 	v = stripANSI(m.View())
-	if !strings.Contains(v, "лог: developer") || !strings.Contains(v, "TEXT  log") {
+	if !strings.Contains(v, uiLog+"developer") || !strings.Contains(v, "TEXT     log") {
 		t.Fatal(v)
 	}
 	for _, r := range v {
@@ -140,7 +148,7 @@ func TestVisibleOutput(t *testing.T) {
 		}
 	}
 	press(m, "down")
-	if len(m.logLines) != 0 || strings.Contains(stripANSI(m.View()), "TEXT  log") {
+	if len(m.logLines) != 0 || strings.Contains(stripANSI(m.View()), "TEXT     log") {
 		t.Fatal("log retained on selection change")
 	}
 	// Unique empty peers remain visible; f reveals hidden duplicates.
@@ -148,16 +156,16 @@ func TestVisibleOutput(t *testing.T) {
 	m.Update(rosterMsg{report: r})
 	press(m, "f")
 	v = stripANSI(m.View())
-	if !strings.Contains(v, "empty-peer") || !strings.Contains(v, "openclaw-peer") || !strings.Contains(v, "все") {
+	if !strings.Contains(v, "empty-peer") || !strings.Contains(v, "openclaw-peer") || !strings.Contains(v, uiShowAll) {
 		t.Fatal(v)
 	}
-	// Stale rendering has a real ANSI faint sequence, independently of color profile.
-	if !strings.Contains(m.View(), "\x1b[2m") {
-		t.Fatal("stale not faint", m.View())
+	// Idle rows retain normal color (U-17).
+	if strings.Contains(m.View(), "\x1b[2m") {
+		t.Fatal("idle row dimmed", m.View())
 	}
 	press(m, "L")
 	v = stripANSI(m.View())
-	if !strings.Contains(v, "лог:") || !strings.Contains(v, "q выход") {
+	if !strings.Contains(v, strings.TrimSpace(uiLog)) || !strings.Contains(v, "q "+uiHelpQuit) {
 		t.Fatal(v)
 	}
 }
@@ -280,11 +288,11 @@ func TestCollectorDecision(t *testing.T) {
 			}
 			_, cmd := m.Update(rosterMsg{report: r})
 			runActions(cmd)
-			want := "свой"
+			want := uiCollectorOwn
 			if external {
-				want = "внешний"
+				want = uiCollectorExternal
 			}
-			if m.collectorMode != want || called != map[bool]int{false: 1, true: 0}[external] || !strings.Contains(stripANSI(m.View()), "сборщик: "+want) {
+			if m.collectorMode != want || called != map[bool]int{false: 1, true: 0}[external] || !strings.Contains(stripANSI(m.View()), uiCollector+want) {
 				t.Fatal(m.collectorMode, called, m.View())
 			}
 			m.Update(rosterMsg{report: r})
@@ -294,7 +302,7 @@ func TestCollectorDecision(t *testing.T) {
 			if external {
 				r.Local.Sessions = nil
 				m.Update(rosterMsg{report: r})
-				if !strings.Contains(stripANSI(m.View()), "сборщик: не найден") {
+				if !strings.Contains(stripANSI(m.View()), uiCollector+uiCollectorMissing) {
 					t.Fatal(m.View())
 				}
 			}
@@ -307,7 +315,7 @@ func TestNarrowHeader(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	press(m, "f")
 	header := strings.Split(stripANSI(m.View()), "\n")[1]
-	for _, want := range []string{"bus-status", "сборщик: внешний", "🔇", "все", "⚠ 1"} {
+	for _, want := range []string{"bus-status", uiCollector + uiCollectorExternal, "🔇", uiShowAll, "⚠ 1"} {
 		if !strings.Contains(header, want) {
 			t.Fatalf("missing %q: %s", want, header)
 		}
@@ -342,7 +350,7 @@ func TestPeerActivityRefresh(t *testing.T) {
 	s.Sessions["master@macbook"] = Record{Status: "old", UpdatedAt: now.Add(-time.Hour)}
 	m.Update(stateMsg{state: s})
 	v := stripANSI(m.View())
-	if !strings.Contains(v, "◐ ▾ openclaw-peer") || !strings.Contains(v, "◐ работают lanes") {
+	if !strings.Contains(v, "◐ ▾ openclaw-peer") || !strings.Contains(v, uiLanesLegend) {
 		t.Fatal(v)
 	}
 	// Stat work is deferred until the command runs, then refreshes activity without opening the log pane.
@@ -381,7 +389,7 @@ func TestPeerActivityRefresh(t *testing.T) {
 		t.Fatal(m.View())
 	}
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
-	if !strings.Contains(stripANSI(m.View()), "◐ работают lanes") {
+	if !strings.Contains(stripANSI(m.View()), uiLanesLegend) {
 		t.Fatal(m.View())
 	}
 }
@@ -391,7 +399,7 @@ func TestInitialWindowSize(t *testing.T) {
 	if got := m.View(); got != "" {
 		t.Fatalf("frame before size: %q", got)
 	}
-	if m.collectorMode != "проверяю…" {
+	if m.collectorMode != uiCollectorChecking {
 		t.Fatal(m.collectorMode)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
@@ -412,7 +420,7 @@ func TestCollectorFailureRetry(t *testing.T) {
 	}
 	cmd := m.collectorDecision()
 	m.Update(cmd())
-	if m.collectorDecided || m.ownCollector || !strings.Contains(stripANSI(m.View()), "Ошибка сборщика: offline") {
+	if m.collectorDecided || m.ownCollector || !strings.Contains(stripANSI(m.View()), uiCollectorError+"offline") {
 		t.Fatal(m.View())
 	}
 	if len([]rune(m.collectorErr)) != 200 || strings.ContainsAny(m.collectorErr, "\x1b\u202e") {
@@ -434,7 +442,7 @@ func TestCollectorFailureRetry(t *testing.T) {
 	}
 	m.report.Local.Sessions = []Row{{Product: "bus-status", Connected: true}}
 	m.collectorDecision()
-	if m.collectorMode != "внешний" || m.collectorErr != "" {
+	if m.collectorMode != uiCollectorExternal || m.collectorErr != "" {
 		t.Fatal(m.collectorMode, m.collectorErr)
 	}
 }
@@ -607,7 +615,7 @@ func TestTableViewGolden(t *testing.T) {
 			m.Update(stateMsg{state: s})
 			m.Update(rosterMsg{report: r})
 			got := stripANSI(m.View()) + "\n"
-			for _, want := range []string{"СЕССИЯ", "СТАТУС", "МОДЕЛЬ", "ХАРНЕСС", "developer", "opus-5-5", "glm-5.3", "…"} {
+			for _, want := range []string{uiSession, uiStatus, uiModel, uiHarness, "developer", "opus-5-5", "glm-5.3", "…"} {
 				if !strings.Contains(got, want) {
 					t.Fatalf("missing %q:\n%s", want, got)
 				}
@@ -641,16 +649,169 @@ func TestDuplicatePeerToggle(t *testing.T) {
 	m.Update(stateMsg{state: s})
 	m.Update(rosterMsg{report: r})
 	v := stripANSI(m.View())
-	if !strings.Contains(v, "скрыто 1") || strings.Contains(v, "same · old") || !strings.Contains(v, "empty") {
+	if !strings.Contains(v, fmt.Sprintf(uiHidden, 1)) || strings.Contains(v, "same · old") || !strings.Contains(v, "empty") {
 		t.Fatal(v)
 	}
 	press(m, "f")
 	v = stripANSI(m.View())
-	if !strings.Contains(v, "same · old") || strings.Contains(v, "скрыто 1") {
+	if !strings.Contains(v, "same · old") || strings.Contains(v, fmt.Sprintf(uiHidden, 1)) {
 		t.Fatal(v)
 	}
 	press(m, "f")
 	if strings.Contains(stripANSI(m.View()), "same · old") {
 		t.Fatal(m.View())
+	}
+}
+
+func TestLogPaneWrapAndColors(t *testing.T) {
+	m, _, _, now := testModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	press(m, "l")
+	text := strings.Repeat("界🙂", 150) + "\nSECOND\x1b\u202e"
+	m.Update(logMsg{gen: m.generation, lines: []LogLine{{At: now, Kind: "TEXT", Text: text}, {At: now, Kind: "TOOL", Tool: "Bash\x1b", Text: "echo safe"}, {Kind: "RESULT", Text: "result"}, {Kind: "THINK", Text: "thinking"}, {Kind: "SYS", Text: "system"}}})
+	plain := m.renderLogs(58)
+	if !strings.HasPrefix(plain, now.Format("15:04:05")+"  TEXT     ") {
+		t.Fatal("log columns", plain)
+	}
+	if strings.ContainsAny(plain, "\x1b\u202e") || !strings.Contains(plain, "SECOND") || !strings.Contains(plain, "Bash") {
+		t.Fatal(plain)
+	}
+	var recovered strings.Builder
+	for i, line := range strings.Split(plain, "\n") {
+		if lipgloss.Width(line) > 58 {
+			t.Fatal("wrap overflow", line)
+		}
+		if i > 0 && strings.Contains(line, "界") && !strings.HasPrefix(line, strings.Repeat(" ", 19)) {
+			t.Fatal("missing hanging indent", line)
+		}
+		for _, r := range line {
+			if r == '界' || r == '🙂' {
+				recovered.WriteRune(r)
+			}
+		}
+	}
+	if recovered.String() != strings.Repeat("界🙂", 150) {
+		t.Fatal("wrapped text lost")
+	}
+	m.config.color = true
+	m.logRenderer = lipgloss.NewRenderer(io.Discard)
+	m.logRenderer.SetColorProfile(termenv.ANSI)
+	colored := m.renderLogs(58)
+	for _, code := range []string{"[32m", "[36m", "[2m", "[33m", "[35m", "[1;36m"} {
+		if !strings.Contains(colored, code) {
+			t.Fatalf("missing style %s: %q", code, colored)
+		}
+	}
+	if stripANSI(colored) != plain {
+		t.Fatal("color changed text")
+	}
+	m.config.color = false
+	if got := m.renderLogs(58); got != plain || strings.Contains(got, "\x1b") {
+		t.Fatal("color leaked while disabled", got)
+	}
+}
+
+func TestLogFocusScrollAndFollow(t *testing.T) {
+	m, _, _, _ := testModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	press(m, "l")
+	lines := make([]LogLine, 40)
+	for i := range lines {
+		lines[i] = LogLine{Kind: "TEXT", Text: fmt.Sprintf("record %02d", i)}
+	}
+	m.Update(logMsg{gen: m.generation, lines: lines})
+	if !m.viewport.AtBottom() {
+		t.Fatal("initial tail")
+	}
+	press(m, "tab")
+	if m.focus != "log" || !strings.Contains(stripANSI(m.View()), "focus: log") {
+		t.Fatal(m.View())
+	}
+	selected := m.selected
+	press(m, "g")
+	if m.viewport.YOffset != 0 || m.selected != selected {
+		t.Fatal("g did not scroll log")
+	}
+	press(m, "down")
+	if m.viewport.YOffset != 1 {
+		t.Fatal(m.viewport.YOffset)
+	}
+	press(m, "up")
+	if m.viewport.YOffset != 0 {
+		t.Fatal(m.viewport.YOffset)
+	}
+	press(m, "pgdown")
+	if m.viewport.YOffset == 0 {
+		t.Fatal("page down")
+	}
+	press(m, "pgup")
+	if m.viewport.YOffset != 0 {
+		t.Fatal("page up")
+	}
+	press(m, "g")
+	offset := m.viewport.YOffset
+	m.Update(logMsg{gen: m.generation, lines: []LogLine{{Kind: "TEXT", Text: "appended one"}, {Kind: "TEXT", Text: "appended two"}}})
+	if m.viewport.YOffset != offset || m.newLogLines != 2 || !strings.Contains(stripANSI(m.View()), "▼ 2│") {
+		t.Fatal(m.viewport.YOffset, m.newLogLines, m.View())
+	}
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 15})
+	if m.viewport.YOffset < 0 || m.viewport.YOffset > m.viewport.TotalLineCount() {
+		t.Fatal("bad resize offset")
+	}
+	for _, line := range strings.Split(stripANSI(m.View()), "\n") {
+		if lipgloss.Width(line) > 40 {
+			t.Fatal("resized frame overflow", line)
+		}
+	}
+	if len(strings.Split(m.View(), "\n")) > 15 {
+		t.Fatal("resized frame too tall")
+	}
+	press(m, "G")
+	if !m.viewport.AtBottom() || m.newLogLines != 0 || strings.Contains(stripANSI(m.View()), "▼ 2") {
+		t.Fatal("tail not restored")
+	}
+	press(m, "L")
+	if m.pane != "logFull" || m.focus != "log" {
+		t.Fatal(m.pane, m.focus)
+	}
+	press(m, "esc")
+	if m.pane != "log" || m.focus != "tree" {
+		t.Fatal(m.pane, m.focus)
+	}
+	press(m, "tab")
+	if !strings.Contains(stripANSI(m.View()), "PgUp/PgDn") {
+		t.Fatal("log help missing")
+	}
+}
+
+func TestEnglishUIAndIdleRows(t *testing.T) {
+	m, r, s, now := testModel(t)
+	r.Local.Sessions = append(r.Local.Sessions, Row{SessionID: "wait", Name: "waiting-lane", Kind: "lane", Product: "codex-peer"})
+	s.Sessions["wait"] = Record{Status: "жду master", UpdatedAt: now.Add(-13 * time.Minute)}
+	m.Update(rosterMsg{report: r})
+	m.Update(stateMsg{state: s})
+	for _, got := range []string{stripANSI(m.View()), Render(r, s, now, false)} {
+		for _, want := range []string{uiSession, uiStatus, uiAge, uiModel, uiHarness, "idle", "жду master"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("missing %s: %s", want, got)
+			}
+		}
+		for _, bad := range []string{"сборщик:", "ЖДЁТ:", "нет статуса", "недоступен", "история", "работают"} {
+			if strings.Contains(got, bad) {
+				t.Fatal("Russian UI label", bad, got)
+			}
+		}
+	}
+	if strings.Contains(m.View(), "\x1b[2m") || strings.Contains(Render(r, s, now, true), "\x1b[2m") {
+		t.Fatal("idle rows dimmed")
+	}
+	n := &fakeNotifier{}
+	m.notifier = n
+	m.muted = false
+	m.alerts = Alerts{}
+	m.alerts.Tick(now, nil)
+	runActions(m.alertCmd())
+	if len(n.bodies) != 1 || !strings.Contains(n.bodies[0], " asks: ") {
+		t.Fatal(n.bodies)
 	}
 }

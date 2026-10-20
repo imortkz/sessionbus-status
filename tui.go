@@ -23,6 +23,7 @@ type tuiConfig struct {
 	command                        []string
 	interval, timeout              time.Duration
 	muted                          bool
+	color                          bool
 }
 type rosterMsg struct {
 	report Report
@@ -60,6 +61,10 @@ type Model struct {
 	selected                       string
 	collapsed                      map[string]bool
 	pane                           string
+	focus                          string
+	followTail                     bool
+	newLogLines                    int
+	logRenderer                    *lipgloss.Renderer
 	showAll, muted                 bool
 	collectorMode                  string
 	collectorErr                   string
@@ -96,19 +101,20 @@ func newModel(c tuiConfig) *Model {
 	if c.timeout <= 0 {
 		c.timeout = 10 * time.Second
 	}
-	m := &Model{config: c, collapsed: map[string]bool{}, pane: "history", muted: c.muted, collectorMode: "проверяю…", width: 100, height: 30, viewport: viewport.New(98, 8), help: help.New(), now: time.Now, notifier: macNotifier{}, startCollector: startCollector}
+	m := &Model{config: c, collapsed: map[string]bool{}, pane: "history", muted: c.muted, collectorMode: uiCollectorChecking, focus: "tree", followTail: true, logRenderer: lipgloss.DefaultRenderer(), width: 100, height: 30, viewport: viewport.New(98, 8), help: help.New(), now: time.Now, notifier: macNotifier{}, startCollector: startCollector}
 	m.keys = keyMap{
-		key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "выбор")),
-		key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←→", "свернуть")),
-		key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "лог/история")),
-		key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "лог во весь экран")),
-		key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "все/скрыть")),
-		key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "звук вкл/выкл")),
-		key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "выход")),
+		key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", uiHelpSelect)),
+		key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←→", uiHelpCollapse)),
+		key.NewBinding(key.WithKeys("l"), key.WithHelp("l", uiHelpPane)),
+		key.NewBinding(key.WithKeys("L"), key.WithHelp("L", uiHelpFullLog)),
+		key.NewBinding(key.WithKeys("f"), key.WithHelp("f", uiHelpShowAll)),
+		key.NewBinding(key.WithKeys("tab"), key.WithHelp("Tab", uiHelpFocus)),
+		key.NewBinding(key.WithKeys("s"), key.WithHelp("s", uiHelpSound)),
+		key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", uiHelpQuit)),
 	}
 	m.readLog = func(r *LogReader, v visibleNode) (*LogReader, []LogLine, error) {
 		if !v.local {
-			return nil, nil, fmt.Errorf("remote-host: локальный лог недоступен")
+			return nil, nil, fmt.Errorf("remote-host: %s %s", uiNoLog, cleanText(v.host, 120))
 		}
 		if r == nil {
 			id, _, _ := strings.Cut(v.node.ID, "@")
@@ -204,6 +210,9 @@ func (m *Model) selectID(id string) {
 	m.logLines = nil
 	m.logErr = ""
 	m.viewport.SetContent("")
+	m.viewport.GotoTop()
+	m.followTail = true
+	m.newLogLines = 0
 }
 func (m *Model) rebuild() {
 	m.tree = BuildTree(m.report, m.state, m.now(), m.activity)
@@ -314,9 +323,9 @@ func (m *Model) collectorDecision() tea.Cmd {
 	}
 	if m.collectorDecided {
 		if !m.ownCollector {
-			m.collectorMode = "не найден"
+			m.collectorMode = uiCollectorMissing
 			if external {
-				m.collectorMode = "внешний"
+				m.collectorMode = uiCollectorExternal
 			}
 		}
 		return nil
@@ -327,10 +336,10 @@ func (m *Model) collectorDecision() tea.Cmd {
 	m.collectorDecided = true
 	m.collectorErr = ""
 	if external {
-		m.collectorMode = "внешний"
+		m.collectorMode = uiCollectorExternal
 		return nil
 	}
-	m.collectorMode = "свой"
+	m.collectorMode = uiCollectorOwn
 	m.ownCollector = true
 	start, c := m.startCollector, m.config
 	if c.collectorWG != nil {
@@ -346,6 +355,7 @@ func (m *Model) collectorDecision() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 	gen, pane := m.generation, m.pane
 	defer func() {
+		m.syncLogViewport()
 		if gen != m.generation || pane != m.pane {
 			if log := m.requestLog(); log != nil {
 				if cmd == nil {
@@ -391,14 +401,14 @@ func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		return m, m.alertCmd()
 	case collectorMsg:
 		if m.config.ctx.Err() == nil {
-			m.collectorMode = "не найден"
+			m.collectorMode = uiCollectorMissing
 			m.ownCollector = false
 			m.collectorDecided = false
 			m.collectorRetryAt = m.now().Add(10 * time.Second)
 			if msg.err != nil {
 				m.collectorErr = cleanText(msg.err.Error(), 200)
 			} else {
-				m.collectorErr = "сборщик остановлен"
+				m.collectorErr = uiCollectorStopped
 			}
 		}
 	case logMsg:
@@ -411,12 +421,41 @@ func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 			m.logErr = cleanText(msg.err.Error(), 200)
 		} else {
 			m.logErr = ""
+			if !m.followTail {
+				m.newLogLines += len(msg.lines)
+			}
 			m.logLines = append(m.logLines, msg.lines...)
 			if len(m.logLines) > 200 {
 				m.logLines = m.logLines[len(m.logLines)-200:]
 			}
 		}
 	case tea.KeyMsg:
+		if m.focus == "log" {
+			scrolled := true
+			switch msg.String() {
+			case "up":
+				m.viewport.LineUp(1)
+			case "down":
+				m.viewport.LineDown(1)
+			case "pgup":
+				m.viewport.PageUp()
+			case "pgdown":
+				m.viewport.PageDown()
+			case "g":
+				m.viewport.GotoTop()
+			case "G":
+				m.viewport.GotoBottom()
+			default:
+				scrolled = false
+			}
+			if scrolled {
+				m.followTail = m.viewport.AtBottom()
+				if m.followTail {
+					m.newLogLines = 0
+				}
+				return m, nil
+			}
+		}
 		rows := m.visible()
 		idx := 0
 		for i, v := range rows {
@@ -450,11 +489,25 @@ func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 				m.pane = "log"
 			} else {
 				m.pane = "history"
+				m.focus = "tree"
 			}
 		case "L":
 			m.pane = "logFull"
+			m.focus = "log"
 		case "esc":
-			m.pane = "history"
+			m.focus = "tree"
+			if m.pane == "logFull" {
+				m.pane = "log"
+			}
+		case "tab":
+			if m.focus == "tree" {
+				m.focus = "log"
+				if m.pane == "history" {
+					m.pane = "log"
+				}
+			} else {
+				m.focus = "tree"
+			}
 		case "f":
 			m.showAll = !m.showAll
 			m.rebuild()
@@ -472,10 +525,19 @@ func (m *Model) helpLines(width int) []string {
 	var lines []string
 	line := ""
 	var pieces []string
-	for _, b := range m.keys {
+	bindings := m.keys
+	if m.focus == "log" {
+		bindings = keyMap{
+			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", uiHelpScroll)), key.NewBinding(key.WithKeys("pgup", "pgdown"), key.WithHelp("PgUp/PgDn", uiHelpPage)),
+			key.NewBinding(key.WithKeys("g"), key.WithHelp("g", uiHelpTop)), key.NewBinding(key.WithKeys("G"), key.WithHelp("G", uiHelpTail)),
+			key.NewBinding(key.WithKeys("tab"), key.WithHelp("Tab", uiHelpFocus)), key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", uiHelpBack)),
+			key.NewBinding(key.WithKeys("L"), key.WithHelp("L", uiHelpFullLog)), key.NewBinding(key.WithKeys("s"), key.WithHelp("s", uiHelpSound)), key.NewBinding(key.WithKeys("q"), key.WithHelp("q", uiHelpQuit)),
+		}
+	}
+	for _, b := range bindings {
 		pieces = append(pieces, h.ShortHelpView([]key.Binding{b}))
 	}
-	pieces = append(pieces, "◐ работают lanes")
+	pieces = append(pieces, uiLanesLegend)
 	for _, piece := range pieces {
 		if line != "" && lipgloss.Width(line+"  "+piece) > width {
 			lines = append(lines, line)
@@ -492,30 +554,13 @@ func (m *Model) helpLines(width int) []string {
 	return lines
 }
 func (m *Model) paneContent() string {
-	if m.pane != "history" {
-		if m.logErr != "" {
-			return m.logErr
-		}
-		if len(m.logLines) == 0 {
-			return "ожидание лога…"
-		}
-		var lines []string
-		for _, l := range m.logLines {
-			stamp := ""
-			if !l.At.IsZero() {
-				stamp = l.At.Format("15:04:05") + " "
-			}
-			lines = append(lines, stamp+cleanText(l.Kind, 20)+"  "+cleanText(l.Text, logLimit(l.Kind)))
-		}
-		return strings.Join(lines, "\n")
-	}
 	rec := m.state.Sessions[m.selected]
 	var lines []string
 	for _, e := range rec.History {
 		lines = append(lines, e.At.Format("15:04:05")+" "+cleanText(e.Kind, 20)+"  "+cleanText(e.Text, 120))
 	}
 	if len(lines) == 0 {
-		return "история пуста"
+		return uiHistoryEmpty
 	}
 	return strings.Join(lines, "\n")
 }
@@ -530,20 +575,20 @@ func (m *Model) View() string {
 	if m.muted {
 		icon = "🔇"
 	}
-	collector := "сборщик: " + m.collectorMode
-	if m.collectorMode == "не найден" {
+	collector := uiCollector + m.collectorMode
+	if m.collectorMode == uiCollectorMissing {
 		collector = "\x1b[31m" + collector + "\x1b[0m"
 	}
 	badges := ""
 	if m.showAll {
-		badges += " · все"
+		badges += " · " + uiShowAll
 	}
 	if hidden := hiddenDuplicates(m.tree); hidden > 0 && !m.showAll {
-		badges += fmt.Sprintf(" · скрыто %d", hidden)
+		badges += " · " + fmt.Sprintf(uiHidden, hidden)
 	}
 	count := len(askIDs(m.report, m.state))
 	if count > 0 {
-		badges += fmt.Sprintf(" · ⚠ %d ждёт тебя", count)
+		badges += " · " + fmt.Sprintf(uiWaitingCount, count)
 	}
 	core := "bus-status · " + collector + " · " + icon
 	head := "bus-status · " + cleanText(m.report.Local.Host, 120) + " · " + m.now().Format("15:04:05") + " · " + collector + " · " + icon + badges
@@ -551,18 +596,18 @@ func (m *Model) View() string {
 		head = core + badges
 	}
 	if lipgloss.Width(head) > width && count > 0 {
-		head = strings.Replace(head, " ждёт тебя", "", 1)
+		head = strings.Replace(head, uiWaitingSuffix, "", 1)
 	}
 	bodyHeight := max(1, height-len(helpLines)-1)
 	var body []string
 	if m.rosterErr != "" {
-		body = append(body, "Ошибка roster: "+m.rosterErr)
+		body = append(body, uiRosterError+m.rosterErr)
 	}
 	if m.stateErr != "" {
-		body = append(body, "Ошибка state: "+m.stateErr)
+		body = append(body, uiStateError+m.stateErr)
 	}
 	if m.collectorErr != "" {
-		body = append(body, "Ошибка сборщика: "+m.collectorErr)
+		body = append(body, uiCollectorError+m.collectorErr)
 	}
 	available := max(1, bodyHeight-len(body))
 	paneHeight := min(available, max(5, bodyHeight*40/100))
@@ -603,7 +648,7 @@ func (m *Model) View() string {
 			if !h.Local || h.Error != "" {
 				line := "── " + h.Host
 				if h.Error != "" {
-					line += ": недоступен (" + h.Error + ")"
+					line += uiUnavailable + h.Error + ")"
 				}
 				lines = append(lines, clipLine(line+" "+strings.Repeat("─", width), width))
 			}
@@ -612,8 +657,6 @@ func (m *Model) View() string {
 				line := table.row(n, labels[n.ID])
 				if n.Ask {
 					line = "\x1b[31m" + line + "\x1b[0m"
-				} else if n.Stale {
-					line = "\x1b[2m" + line + "\x1b[0m"
 				}
 				if n.ID == m.selected {
 					selectedIndex = len(lines)
@@ -631,24 +674,36 @@ func (m *Model) View() string {
 			body = append(body, line)
 		}
 	}
-	title := "история: "
+	title := uiHistory
 	if m.pane != "history" {
-		title = "лог: "
+		title = uiLog
 	}
 	if v, ok := m.selectedRow(); ok {
 		title += v.node.Display
 	}
 	if m.pane != "history" {
-		title += " (live)"
+		title += uiLiveSuffix
+		if m.focus == "log" {
+			title += " · " + uiFocusLog
+		}
 	}
 	body = append(body, "── "+title+" "+strings.Repeat("─", width))
-	vp := m.viewport
-	vp.Width = width
-	vp.Height = max(0, paneHeight-1)
-	vp.SetContent(m.paneContent())
-	vp.GotoBottom()
-	if vp.Height > 0 {
-		body = append(body, strings.Split(vp.View(), "\n")...)
+	if m.pane == "history" {
+		vp := viewport.New(width, max(0, paneHeight-1))
+		vp.SetContent(m.paneContent())
+		vp.GotoBottom()
+		if vp.Height > 0 {
+			body = append(body, strings.Split(vp.View(), "\n")...)
+		}
+	} else {
+		if m.viewport.Height > 0 {
+			body = append(body, strings.Split(m.viewport.View(), "\n")...)
+		}
+		footer := ""
+		if m.newLogLines > 0 {
+			footer = fmt.Sprintf("▼ %d", m.newLogLines)
+		}
+		body = append(body, strings.Repeat(" ", max(0, width-lipgloss.Width(footer)))+footer)
 	}
 	lines := append([]string{head}, body...)
 	lines = append(lines, helpLines...)

@@ -82,7 +82,7 @@ func runWatch(args []string) int {
 		state, loadErr := loadState(*path)
 		frame := Frame(stdout, stderr, runErr, state, time.Now(), color)
 		if loadErr != nil {
-			frame += "Ошибка state: " + sanitize(loadErr.Error()) + "\n"
+			frame += uiStateError + sanitize(loadErr.Error()) + "\n"
 		}
 		fmt.Fprint(os.Stdout, frame)
 		if _, err := decodeReport(stdout); err != nil {
@@ -96,7 +96,7 @@ func runWatch(args []string) int {
 		return 1
 	}
 	wg := &sync.WaitGroup{}
-	model := newModel(tuiConfig{collectorWG: wg, ctx: ctx, cancel: cancel, statePath: *path, home: home, groups: *groups, sound: *sound, command: command, interval: *interval, timeout: *timeout, muted: *muted})
+	model := newModel(tuiConfig{color: color, collectorWG: wg, ctx: ctx, cancel: cancel, statePath: *path, home: home, groups: *groups, sound: *sound, command: command, interval: *interval, timeout: *timeout, muted: *muted})
 	_, runErr := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
 	wasCanceled := ctx.Err() != nil
 	cancel()

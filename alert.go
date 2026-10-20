@@ -44,7 +44,7 @@ func (a *Alerts) Tick(now time.Time, asks []AskInfo) []Action {
 	var actions []Action
 	emit := func(ask AskInfo) {
 		if !a.muted {
-			actions = append(actions, Action{Kind: "sound"}, Action{Kind: "notify", Title: "bus-status", Body: cleanText(ask.Display+" ждёт: "+ask.Text, 200)})
+			actions = append(actions, Action{Kind: "sound"}, Action{Kind: "notify", Title: uiAppName, Body: cleanText(ask.Display+uiNotifyAsks+ask.Text, 200)})
 		}
 	}
 	newAsk := false

@@ -73,10 +73,10 @@ func header(now time.Time, host string, count int, incomplete bool) string {
 		text += " · " + sanitize(host)
 	}
 	if count > 0 {
-		text += fmt.Sprintf("    ⚠ %d ждёт тебя", count)
+		text += "    " + fmt.Sprintf(uiWaitingCount, count)
 	}
 	if incomplete {
-		text += "  · федерация неполная"
+		text += "  · " + uiIncomplete
 	}
 	return text + "\n\n"
 }
@@ -85,11 +85,11 @@ func Render(report Report, state State, now time.Time, color bool) string {
 	trees := BuildTree(report, state, now, nil)
 	heading := header(now, report.Local.Host, len(askIDs(report, state)), !report.Complete)
 	if count := hiddenDuplicates(trees); count > 0 {
-		heading = strings.TrimSuffix(heading, "\n\n") + fmt.Sprintf(" · скрыто %d\n\n", count)
+		heading = strings.TrimSuffix(heading, "\n\n") + " · " + fmt.Sprintf(uiHidden, count) + "\n\n"
 	}
 	out.WriteString(heading)
 	if report.Error != "" {
-		out.WriteString("Ошибка: " + sanitize(report.Error) + "\n")
+		out.WriteString(uiReportError + sanitize(report.Error) + "\n")
 	}
 	var labels []string
 	var measure func(*Node, string, int)
@@ -118,11 +118,11 @@ func Render(report Report, state State, now time.Time, color bool) string {
 type treeTable struct{ width, session, status int }
 
 func newTreeTable(width int, labels []string) treeTable {
-	session := 6
+	session := len(uiSession)
 	for _, s := range labels {
 		session = max(session, lipgloss.Width(s))
 	}
-	session = min(32, session, max(6, width-32))
+	session = min(32, session, max(len(uiSession), width-32))
 	return treeTable{width, session, max(1, width-session-31)}
 }
 func tableCell(s string, width int) string {
@@ -136,7 +136,7 @@ func tableCell(s string, width int) string {
 	return s + strings.Repeat(" ", max(0, width-lipgloss.Width(s)))
 }
 func (t treeTable) header() string {
-	return "  " + tableCell("СЕССИЯ", t.session) + " " + tableCell("СТАТУС", t.status) + " " + tableCell("⏱", 4) + " " + tableCell("МОДЕЛЬ", 14) + " " + tableCell("ХАРНЕСС", 7)
+	return "  " + tableCell(uiSession, t.session) + " " + tableCell(uiStatus, t.status) + " " + tableCell(uiAge, 4) + " " + tableCell(uiModel, 14) + " " + tableCell(uiHarness, 7)
 }
 func shortModel(n *Node) string {
 	model := n.Model
@@ -164,13 +164,17 @@ func sessionText(n *Node, parent string, depth int, collapsed bool) string {
 	return strings.Repeat("  ", depth) + branch + name
 }
 func (t treeTable) row(n *Node, label string) string {
-	return tableCell(n.Icon(), 1) + " " + tableCell(label, t.session) + " " + tableCell(n.Line, t.status) + " " + tableCell(n.Age, 4) + " " + tableCell(shortModel(n), 14) + " " + tableCell(n.Harness, 7)
+	status := n.Line
+	if n.Lane && !n.Running {
+		status = uiIdle + ": " + status
+	}
+	return tableCell(n.Icon(), 1) + " " + tableCell(label, t.session) + " " + tableCell(status, t.status) + " " + tableCell(n.Age, 4) + " " + tableCell(shortModel(n), 14) + " " + tableCell(n.Harness, 7)
 }
 func renderHost(out *strings.Builder, host HostTree, color bool, table treeTable) {
 	if !host.Local || host.Error != "" {
 		line := "── " + host.Host
 		if host.Error != "" {
-			line += ": недоступен (" + host.Error + ")"
+			line += uiUnavailable + host.Error + ")"
 		}
 		out.WriteString(clipLine(line+" "+strings.Repeat("─", table.width), table.width) + "\n")
 	}
@@ -186,8 +190,6 @@ func renderHost(out *strings.Builder, host HostTree, color bool, table treeTable
 		if color {
 			if n.Ask {
 				line = "\x1b[31m" + line + "\x1b[0m"
-			} else if n.Stale {
-				line = "\x1b[2m" + line + "\x1b[0m"
 			}
 		}
 		out.WriteString(strings.TrimRight(line, " ") + "\n")
@@ -227,5 +229,5 @@ func Frame(stdout, stderr []byte, runErr error, state State, now time.Time, colo
 			message = err.Error()
 		}
 	}
-	return header(now, "", 0, false) + "Ошибка roster: " + sanitize(message) + "\n"
+	return header(now, "", 0, false) + uiRosterError + sanitize(message) + "\n"
 }

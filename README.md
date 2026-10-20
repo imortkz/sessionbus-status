@@ -16,7 +16,7 @@ bin/bus-status
 bin/bus-status -g bus-status,openclaw-peer
 ```
 
-On the first successful roster refresh, a connected local `bus-status` collector makes the TUI display-only (`сборщик: внешний`). Otherwise the TUI starts its own collector (`сборщик: свой`) and stops it on exit. An external collector disappearing changes the header to `сборщик: не найден`; restart the TUI to make a new collector decision.
+On the first successful roster refresh, a connected local `bus-status` collector makes the TUI display-only (`collector: external`). Otherwise the TUI starts its own collector (`collector: own`) and stops it on exit. An external collector disappearing changes the header to `collector: not found`; restart the TUI to make a new collector decision.
 
 Senders must share a group with the collector. Launch an interactive master with `-g bus-status` (for example, `claude-peer -g openclaw-peer -g bus-status`); lanes join through `extra_groups`. Messages go directly to `bus-status@<host>`, so group membership does not give other peers extra turns. Both the TUI and headless collector accept comma-separated groups through `-g` (default `bus-status`).
 
@@ -31,24 +31,27 @@ bin/bus-status serve -g bus-status
 
 | Key | Action |
 |---|---|
-| ↑ / ↓ | Select a session; the tree follows the selection |
+| ↑ / ↓ | Select a session in tree focus; scroll one line in log focus |
 | ← / → | Collapse / expand its children |
 | l | Toggle status history / live log |
-| L | Give the live log the full body |
-| Esc | Return to history |
+| Tab | Switch focus between tree and log |
+| L | Give the live log the full body and focus it |
+| PgUp / PgDn | Scroll a page in log focus |
+| g / G | Go to the top / resume following the tail in log focus |
+| Esc | Return to tree focus and the split view |
 | f | Show all sessions / hide stale duplicate peers |
 | s | Mute / unmute sound and notifications |
 | q / Ctrl+C | Quit |
 
 The tree uses a shared table in the TUI and `-once`: session, status, age, shortened model and harness. Child session names omit the parent prefix.
 
-The bottom pane shows the last 20 status, ask and model updates, persisted across restarts. Idle sessions whose last update is over ten minutes old are dimmed. Idle peers with no lanes are hidden when a session on the same host has the same name and a newer status; the header shows `скрыто N`, and `f` reveals them. Active or waiting peers stay visible. Duplicate names get a short ID suffix; unnamed sessions show their harness and short ID. The help stays visible at the bottom, including at 60×20.
+The bottom pane shows the last 20 status, ask and model updates, persisted across restarts. Rows keep their normal color regardless of age. Non-running lanes show `idle` before their status; their age remains visible. Idle peers with no lanes are hidden when a session on the same host has the same name and a newer status; the header shows `hidden N`, and `f` reveals them. Active or waiting peers stay visible. Duplicate names get a short ID suffix; unnamed sessions show their harness and short ID. The help stays visible at the bottom, including at 60×20.
 
-The log pane follows the last 200 parsed lines for local Claude, Codex and DSH sessions. It reads native files under `~/.claude/projects`, `~/.codex/sessions` or `~/.codex/archived_sessions`, and `~/.dsh/sessions` (zstd), respectively. Records are labeled `TEXT`, `THINK`, `TOOL`, `RESULT` or `SYS`. Remote-host logs, missing or unreadable files, and unknown products show an explanation in the pane.
+The log pane follows the last 200 parsed lines for local Claude, Codex and DSH sessions. It reads native files under `~/.claude/projects`, `~/.codex/sessions` or `~/.codex/archived_sessions`, and `~/.dsh/sessions` (zstd), respectively. Records use time, kind and text columns. `TEXT` is green, `TOOL` cyan with a highlighted tool name, `RESULT` dim, `THINK` yellow and `SYS` magenta when color is enabled. Long text wraps under the text column, including CJK and emoji. The parser retains up to 2000 runes per record (400 for tool arguments). The pane follows the tail while at the bottom; scrolling up holds the view and shows `▼ N` new records at the bottom-right. `G` returns to the tail. The help changes with focus. Remote-host logs, missing or unreadable files, and unknown products show an explanation in the pane.
 
-A new pending ask plays `/System/Library/Sounds/Glass.aiff` and posts a `bus-status` notification containing the question. While asks remain, a reminder repeats every minute for the oldest pending ask. `-no-sound` starts with both sound and notifications muted; `-sound PATH` selects a different audio file. Unmuting does not replay every old ask. Notifications require macOS to allow them for the invoking application.
+On startup, existing asks are remembered silently; their next reminder is due after one minute. A new pending ask plays `/System/Library/Sounds/Glass.aiff` and posts a `bus-status` notification with `<name> asks: <text>`. While asks remain, a reminder repeats every minute for the oldest pending ask. `-no-sound` starts with both sound and notifications muted; `-sound PATH` selects a different audio file. Unmuting does not replay every old ask. Notifications require macOS to allow them for the invoking application.
 
-Other TUI and `-once` options: `-interval 2s` (roster polling), `-roster-timeout 10s` (default: the greater of the interval and 10s), `-state PATH`, and `-roster "sessionbus roster --json"`. State and the selected live log refresh once per second (DSH logs at most once every three seconds). The default state file is `$XDG_STATE_HOME/bus-status/state.json`, or `~/.local/state/bus-status/state.json`; an external collector and the TUI must use the same path. Text-frame color requires a terminal and an unset `NO_COLOR`.
+Other TUI and `-once` options: `-interval 2s` (roster polling), `-roster-timeout 10s` (default: the greater of the interval and 10s), `-state PATH`, and `-roster "sessionbus roster --json"`. State and the selected live log refresh once per second (DSH logs at most once every three seconds). The default state file is `$XDG_STATE_HOME/bus-status/state.json`, or `~/.local/state/bus-status/state.json`; an external collector and the TUI must use the same path. All generated UI text is English; status, ask and log text from agents is preserved as supplied. Color requires a terminal and an unset `NO_COLOR`.
 
 Message protocol: send one or more lines with the Sessionbus tool:
 
