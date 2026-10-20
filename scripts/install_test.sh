@@ -56,6 +56,22 @@ tar -tzf "$evil/$asset" | grep -q '^\.\./' || fail 'evil archive lacks ../ membe
 sums "$evil" "$asset"
 expect_fail 'unsafe member' 'Unsafe archive member' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.1 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$evil"
 
+# symlink member
+link="$work/link"; mkdir -p "$link/src"
+printf 'sessionbus-status\n' > "$link/src/ROLE"
+ln -s /bin/sh "$link/src/install"
+tar -czf "$link/$asset" -C "$link/src" ROLE install
+sums "$link" "$asset"
+expect_fail 'symlink member' 'Unsafe archive member' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.1 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$link"
+
+# wrong role
+role="$work/role"; mkdir -p "$role/src"
+printf 'other\n' > "$role/src/ROLE"
+printf '#!/bin/sh\nexit 0\n' > "$role/src/install"
+tar -czf "$role/$asset" -C "$role/src" ROLE install
+sums "$role" "$asset"
+expect_fail 'wrong role' 'Wrong release role' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.1 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$role"
+
 # latest: fake curl serves the releases list; gh is reported unauthenticated
 fakebin="$work/fakebin"; mkdir "$fakebin"
 cat > "$fakebin/gh" <<'SH'
@@ -100,5 +116,22 @@ PATH="$fakebin:$PATH" HOME="$work/neg" FAKE_RELEASES="$work/releases.json" FAKE_
   sh "$repo/scripts/install.sh" >/dev/null || fail 'latest install'
 grep -qx "v0.1.0-alpha.10/$asset" "$work/fetched" || fail "latest picked wrong tag: $(cat "$work/fetched")"
 [ -L "$work/neg/.local/bin/sessionbus-status" ] || fail 'latest: symlink missing'
+
+# latest from compact (single-line) JSON: draft skipped, semver max picked
+printf '%s' '[{"tag_name":"v0.1.0-alpha.3","draft":true,"prerelease":true},{"tag_name":"v0.1.0-alpha.2","draft":false,"prerelease":true},{"tag_name":"v0.1.0-alpha.1","draft":false,"prerelease":true}]' > "$work/compact.json"
+mkdir -p "$assets/v0.1.0-alpha.2"
+cp "$good/$asset" "$good/SHA256SUMS" "$assets/v0.1.0-alpha.2/"
+: > "$work/fetched"
+rm -rf "$work/neg"; mkdir "$work/neg"
+PATH="$fakebin:$PATH" HOME="$work/neg" FAKE_RELEASES="$work/compact.json" FAKE_ASSETS="$assets" FAKE_LOG="$work/fetched" \
+  sh "$repo/scripts/install.sh" >/dev/null || fail 'latest install (compact JSON)'
+grep -qx "v0.1.0-alpha.2/$asset" "$work/fetched" || fail "compact latest picked wrong tag: $(cat "$work/fetched")"
+
+# pin without leading v is normalised to the tag
+: > "$work/fetched"
+rm -rf "$work/neg"; mkdir "$work/neg"
+PATH="$fakebin:$PATH" HOME="$work/neg" SESSIONBUS_STATUS_VERSION=0.1.0-alpha.2 FAKE_ASSETS="$assets" FAKE_LOG="$work/fetched" \
+  sh "$repo/scripts/install.sh" >/dev/null || fail 'pin without v'
+grep -qx "v0.1.0-alpha.2/$asset" "$work/fetched" || fail "pin without v fetched: $(cat "$work/fetched")"
 
 echo 'install_test: ok'

@@ -23,7 +23,7 @@ trap 'exit 1' HUP INT TERM
 # Highest semver tag among non-draft releases, prereleases included.
 # Reads the releases JSON on stdin; prints one tag.
 latest_tag() {
-  awk '
+  tr '{}[]' ',,,,' | tr ',' '\n' | awk '
     /"tag_name"[[:space:]]*:/ { t=$0; sub(/.*"tag_name"[[:space:]]*:[[:space:]]*"/, "", t); sub(/".*/, "", t); tag=t }
     /"draft"[[:space:]]*:[[:space:]]*true/ { draft[tag]=1 }
     { if (tag != "") seen[tag]=1 }
@@ -60,14 +60,14 @@ else
     tag=$(latest_tag < "$tmp/releases")
     [ -n "$tag" ] || { echo "No release found for $repo" >&2; exit 1; }
   else
-    tag=$version
+    tag=v${version#v}
   fi
   base="https://github.com/$repo/releases/download/$tag"
 fi
 
 command -v curl >/dev/null || { echo 'Required command: curl' >&2; exit 1; }
-curl -fLsS --retry 2 "$base/$asset" -o "$tmp/$asset" || { echo "Cannot download $repo release; check the network or set SESSIONBUS_STATUS_DOWNLOAD_ROOT" >&2; exit 1; }
-curl -fLsS --retry 2 "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || { echo "Cannot download $repo checksums; check the network or set SESSIONBUS_STATUS_DOWNLOAD_ROOT" >&2; exit 1; }
+curl -fLsS --retry 2 --connect-timeout 10 --max-time 120 "$base/$asset" -o "$tmp/$asset" || { echo "Cannot download $repo release; check the network or set SESSIONBUS_STATUS_DOWNLOAD_ROOT" >&2; exit 1; }
+curl -fLsS --retry 2 --connect-timeout 10 --max-time 120 "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || { echo "Cannot download $repo checksums; check the network or set SESSIONBUS_STATUS_DOWNLOAD_ROOT" >&2; exit 1; }
 
 expected=$(awk -v file="$asset" '
   $2 == file { count++; if (NF != 2 || length($1) != 64 || $1 ~ /[^0-9a-f]/) bad=1; value=$1 }
