@@ -66,8 +66,8 @@ else
 fi
 
 command -v curl >/dev/null || { echo 'Required command: curl' >&2; exit 1; }
-curl -fLsS --retry 2 "$base/$asset" -o "$tmp/$asset" || { echo "Cannot download $repo release; check the network or set SESSIONBUS_STATUS_DOWNLOAD_ROOT" >&2; exit 1; }
-curl -fLsS --retry 2 "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || { echo "Cannot download $repo checksums; check the network or set SESSIONBUS_STATUS_DOWNLOAD_ROOT" >&2; exit 1; }
+curl -fLsS --retry 2 --connect-timeout 10 --max-time 120 "$base/$asset" -o "$tmp/$asset" || { echo "Cannot download $repo release; check the network or set SESSIONBUS_STATUS_DOWNLOAD_ROOT" >&2; exit 1; }
+curl -fLsS --retry 2 --connect-timeout 10 --max-time 120 "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || { echo "Cannot download $repo checksums; check the network or set SESSIONBUS_STATUS_DOWNLOAD_ROOT" >&2; exit 1; }
 
 expected=$(awk -v file="$asset" '
   $2 == file { count++; if (NF != 2 || length($1) != 64 || $1 ~ /[^0-9a-f]/) bad=1; value=$1 }
