@@ -151,6 +151,21 @@ func shortModel(n *Node) string {
 	return strings.TrimPrefix(model, "claude-")
 }
 
+// Strip only this row's host suffix; internal @ characters belong to the name.
+func sessionDisplayName(n *Node, parent, host string) string {
+	name := n.Display
+	if n.Name != "" && host != "" {
+		name = strings.TrimSuffix(n.Name, "@"+host) + strings.TrimPrefix(n.Display, n.Name)
+	}
+	if n.Lane && parent != "" {
+		if host != "" {
+			parent = strings.TrimSuffix(parent, "@"+host)
+		}
+		name = strings.TrimPrefix(name, parent+"/")
+	}
+	return name
+}
+
 // Session labels share sibling and ancestor connectors across both renderers.
 func sessionLabels(trees []HostTree, collapsed map[string]bool, showAll bool) map[string]string {
 	labels := map[string]string{}
@@ -163,17 +178,9 @@ func sessionLabels(trees []HostTree, collapsed map[string]bool, showAll bool) ma
 		}
 		return out
 	}
-	var walk func(*Node, string, string, string, bool)
-	walk = func(n *Node, parent, prefix, branch string, last bool) {
-		name := n.Display
-		if n.Name != "" {
-			base, _, _ := strings.Cut(n.Name, "@")
-			name = base + strings.TrimPrefix(n.Display, n.Name)
-		}
-		if n.Lane && parent != "" {
-			prefix, _, _ := strings.Cut(parent, "@")
-			name = strings.TrimPrefix(name, prefix+"/")
-		}
+	var walk func(*Node, string, string, string, string, bool)
+	walk = func(n *Node, parent, prefix, branch, host string, last bool) {
+		name := sessionDisplayName(n, parent, host)
 		children := visible(n.Children)
 		arrow := ""
 		if len(children) > 0 {
@@ -199,12 +206,12 @@ func sessionLabels(trees []HostTree, collapsed map[string]bool, showAll bool) ma
 			if isLast {
 				b = "└ "
 			}
-			walk(c, n.Name, childPrefix, b, isLast)
+			walk(c, n.Name, childPrefix, b, host, isLast)
 		}
 	}
 	for _, h := range trees {
 		for _, n := range visible(h.Nodes) {
-			walk(n, "", "", "", true)
+			walk(n, "", "", "", h.Host, true)
 		}
 	}
 	return labels

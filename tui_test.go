@@ -1156,3 +1156,24 @@ func TestCollectorErrorHeaderKeepsAlerts(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionHostSuffixIsExact(t *testing.T) {
+	m, _, _, now := testModel(t)
+	r := Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{
+		{SessionID: "mail", Name: "alice@example", Kind: "peer"},
+		{SessionID: "path", Name: "team@local/notes", Kind: "peer"},
+		{SessionID: "owner", Name: "team@dept@local", Kind: "peer"},
+		{SessionID: "child", Name: "team@dept/review@local", Owner: "owner", Kind: "lane"},
+	}}, Remote: []Host{{Host: "office", Sessions: []Row{{SessionID: "remote", Name: "bob@local", Kind: "peer"}}}}}
+	m.Update(rosterMsg{report: r})
+	for _, got := range []string{stripANSI(m.View()), Render(r, State{}, now, false)} {
+		for _, want := range []string{"○ alice@example", "team@local/notes", "▾ team@dept", "└ review", "bob@local"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("name changed: missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, "team@dept@local") && !strings.Contains(got, uiHistory+"team@dept@local") {
+			t.Fatal(got)
+		}
+	}
+}

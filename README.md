@@ -45,7 +45,7 @@ bin/bus-status serve -g bus-status
 | s | Mute / unmute sound and notifications |
 | q / Ctrl+C | Quit |
 
-The tree uses a shared table in the TUI and `-once`: session, status, age, shortened model and harness. Session names omit `@host` because rows are grouped by host. Child session names also omit the parent prefix.
+The tree uses a shared table in the TUI and `-once`: session, status, age, shortened model and harness. Session names omit a trailing `@host` matching their row’s host because rows are grouped by host; other `@` characters are preserved. Child session names also omit the parent prefix.
 
 The bottom pane shows the last 20 status, ask and model updates, persisted across restarts. Rows keep their normal color regardless of age. Non-running lanes show `idle` in the AGE cell (for example, `idle 59m`); their status stays unchanged. Idle peers with no lanes are hidden when a session on the same host has the same name and a newer status; the header shows `hidden N`, and `f` reveals them. Active or waiting peers stay visible. Names duplicated among visible sessions get a short ID suffix; unnamed sessions show their harness and short ID. The help stays visible at the bottom, including at 60×20.
 
