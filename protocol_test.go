@@ -28,3 +28,20 @@ func TestApplyClearsAskAndSanitizes(t *testing.T) {
 		t.Fatal("empty update changed age")
 	}
 }
+
+func TestSanitizeDropsUnicodeFormatCharacters(t *testing.T) {
+	text := "ab\u202Ecd\u200Bef\u2066gh\u2069"
+	if got := sanitize(text); got != "abcdefgh" {
+		t.Fatalf("format characters survived: %q", got)
+	}
+	updates := ParseBody("status: " + text)
+	rec := Apply(Record{}, updates, time.Now())
+	if rec.Status != "abcdefgh" {
+		t.Fatalf("write sanitizer: %q", rec.Status)
+	}
+	report, state, now := fixture(t)
+	state.Sessions["developer@macbook"] = Record{Status: text}
+	if got := Render(report, state, now, false); !strings.Contains(got, "abcdefgh") || strings.ContainsAny(got, "\u202E\u200B\u2066\u2069") {
+		t.Fatalf("render sanitizer: %q", got)
+	}
+}

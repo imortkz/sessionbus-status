@@ -20,7 +20,7 @@ func sanitize(text string) string {
 		if r == '\t' || r == '\n' || r == '\r' {
 			return ' '
 		}
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
 			return -1
 		}
 		return r
