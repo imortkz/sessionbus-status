@@ -840,3 +840,23 @@ func TestSiblingTreeConnectors(t *testing.T) {
 		t.Fatal(v)
 	}
 }
+
+func TestOwnerHostPrefixShortening(t *testing.T) {
+	m, _, _, now := testModel(t)
+	r := Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{
+		{SessionID: "p", Name: "project@local", Kind: "peer"},
+		{SessionID: "c", Name: "project/review@local", Kind: "lane", Owner: "p"},
+		{SessionID: "n", Name: "project/review/nested", Kind: "lane", Owner: "c"},
+	}}}
+	m.Update(rosterMsg{report: r})
+	for _, got := range []string{stripANSI(m.View()), Render(r, State{}, now, false)} {
+		for _, want := range []string{"└ ▾ review@local", "└ nested"} {
+			if !strings.Contains(got, want) {
+				t.Fatal("owner prefix retained", want, got)
+			}
+		}
+		if strings.Contains(got, "project/review") {
+			t.Fatal("owner prefix retained in session column", got)
+		}
+	}
+}

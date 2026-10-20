@@ -152,8 +152,9 @@ func sessionLabels(trees []HostTree, collapsed map[string]bool, showAll bool) ma
 	var walk func(*Node, string, string, string, bool)
 	walk = func(n *Node, parent, prefix, branch string, last bool) {
 		name := n.Display
-		if parent != "" {
-			name = strings.TrimPrefix(name, parent+"/")
+		if n.Lane && parent != "" {
+			prefix, _, _ := strings.Cut(parent, "@")
+			name = strings.TrimPrefix(name, prefix+"/")
 		}
 		children := visible(n.Children)
 		arrow := ""
