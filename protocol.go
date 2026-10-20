@@ -61,7 +61,9 @@ func Apply(rec Record, updates []Update, now time.Time) Record {
 		if len(rec.History) > 20 {
 			rec.History = rec.History[len(rec.History)-20:]
 		}
-		rec.UpdatedAt = now
+		if u.Kind != "model" {
+			rec.UpdatedAt = now
+		}
 	}
 	return rec
 }

@@ -45,3 +45,20 @@ func TestSanitizeDropsUnicodeFormatCharacters(t *testing.T) {
 		t.Fatalf("render sanitizer: %q", got)
 	}
 }
+
+func TestModelPreservesStatusAge(t *testing.T) {
+	old := time.Now().Add(-time.Hour)
+	now := old.Add(time.Hour)
+	rec := Apply(Record{Status: "old", UpdatedAt: old}, []Update{{Kind: "model", Text: "new-model"}}, now)
+	if !rec.UpdatedAt.Equal(old) || rec.Model != "new-model" || len(rec.History) != 1 || !rec.History[0].At.Equal(now) {
+		t.Fatal(rec)
+	}
+	rec = Apply(rec, []Update{{Kind: "ask", Text: "question"}}, now)
+	if !rec.UpdatedAt.Equal(now) {
+		t.Fatal(rec)
+	}
+	rec = Apply(rec, []Update{{Kind: "status", Text: "done"}}, now.Add(time.Second))
+	if !rec.UpdatedAt.Equal(now.Add(time.Second)) {
+		t.Fatal(rec)
+	}
+}
