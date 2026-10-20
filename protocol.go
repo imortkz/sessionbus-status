@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"time"
 )
@@ -15,10 +16,29 @@ type Record struct {
 	History   []Entry   `json:"history,omitempty"`
 	Product   string    `json:"product"`
 	Model     string    `json:"model"`
+	Tab       string    `json:"tab,omitempty"`
+	Name      string    `json:"name,omitempty"`
 	Status    string    `json:"status"`
 	Ask       string    `json:"ask"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+var itermGUIDRE = regexp.MustCompile(`^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$`)
+
+// validITermGUID gates every value that may reach a shell command line.
+func validITermGUID(s string) bool { return itermGUIDRE.MatchString(s) }
+
+// tabGUID takes ITERM_SESSION_ID ("w1t6p0:GUID") or a bare GUID and returns the GUID or "".
+func tabGUID(v string) string {
+	if i := strings.LastIndex(v, ":"); i >= 0 {
+		v = v[i+1:]
+	}
+	if validITermGUID(v) {
+		return v
+	}
+	return ""
+}
+
 type Update struct{ Kind, Text string }
 
 func sanitize(text string) string { return cleanText(text, 120) }
@@ -30,7 +50,7 @@ func ParseBody(body string) []Update {
 			continue
 		}
 		kind = strings.ToLower(kind)
-		if kind != "status" && kind != "ask" && kind != "model" {
+		if kind != "status" && kind != "ask" && kind != "model" && kind != "tab" && kind != "name" {
 			continue
 		}
 		text = sanitize(text)
@@ -54,6 +74,14 @@ func Apply(rec Record, updates []Update, now time.Time) Record {
 			rec.Ask = text
 		case "model":
 			rec.Model = text
+		case "tab":
+			if g := tabGUID(text); g != "" {
+				rec.Tab = g
+			}
+			continue
+		case "name":
+			rec.Name = cleanText(text, 60)
+			continue
 		default:
 			continue
 		}

@@ -25,13 +25,30 @@ const (
 type Node struct {
 	Activity                          Activity
 	ID, Display, Harness, Model, Line string
-	Name                              string
+	Name, SelfName                    string
 	Lane                              bool
 	Ask, Running                      bool
 	Age                               string
 	Children                          []*Node
 	HasAskBelow                       bool
 	HiddenDuplicate                   bool
+}
+
+// baseName is the roster name, else the name the peer reported itself.
+func (n *Node) baseName() string {
+	if n.Name != "" {
+		return n.Name
+	}
+	return n.SelfName
+}
+
+// countKey is the name as rendered: sessionDisplayName strips the row's own
+// host suffix from roster names, so duplicates are counted after the same strip.
+func (n *Node) countKey(host string) string {
+	if n.Name != "" && host != "" {
+		return strings.TrimSuffix(n.Name, "@"+host)
+	}
+	return n.baseName()
 }
 
 func shortID(id string) string {
@@ -106,6 +123,11 @@ func BuildTree(report Report, state State, now time.Time, activity, firstSeen ma
 				h = "dsh"
 			}
 			display := cleanText(row.Name, 120)
+			selfName := ""
+			if display == "" {
+				selfName = cleanText(rec.Name, 60)
+				display = selfName
+			}
 			if display == "" {
 				display = h + " · " + shortID(id)
 			}
@@ -117,7 +139,7 @@ func BuildTree(report Report, state State, now time.Time, activity, firstSeen ma
 			if line == "" {
 				line = noStatus
 			}
-			n := &Node{Lane: row.Kind != "peer", Name: cleanText(row.Name, 120), ID: id, Display: display, Harness: h, Model: cleanText(rec.Model, 120), Line: line, Ask: ask, Running: row.Running, HasAskBelow: hasAsk(id, map[string]bool{})}
+			n := &Node{Lane: row.Kind != "peer", Name: cleanText(row.Name, 120), SelfName: selfName, ID: id, Display: display, Harness: h, Model: cleanText(rec.Model, 120), Line: line, Ask: ask, Running: row.Running, HasAskBelow: hasAsk(id, map[string]bool{})}
 			live := row.Running
 			lanes := false
 			if row.Kind == "peer" {
@@ -263,8 +285,8 @@ func applyDisplayNames(trees []HostTree, showAll bool) {
 		var collect func(*Node)
 		collect = func(n *Node) {
 			nodes = append(nodes, n)
-			if n.Name != "" && (showAll || !n.HiddenDuplicate) {
-				counts[n.Name]++
+			if key := n.countKey(h.Host); key != "" && (showAll || !n.HiddenDuplicate) {
+				counts[key]++
 			}
 			for _, c := range n.Children {
 				collect(c)
@@ -274,10 +296,10 @@ func applyDisplayNames(trees []HostTree, showAll bool) {
 			collect(n)
 		}
 		for _, n := range nodes {
-			n.Display = n.Name
-			if n.Name == "" {
+			n.Display = n.baseName()
+			if n.Display == "" {
 				n.Display = n.Harness + " · " + shortID(n.ID)
-			} else if (showAll || !n.HiddenDuplicate) && counts[n.Name] > 1 {
+			} else if (showAll || !n.HiddenDuplicate) && counts[n.countKey(h.Host)] > 1 {
 				n.Display += " · " + shortID(n.ID)
 			}
 		}

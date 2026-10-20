@@ -173,10 +173,14 @@ func TestVisibleOutput(t *testing.T) {
 type fakeNotifier struct {
 	sounds []string
 	bodies []string
+	notes  []Notice
 }
 
-func (f *fakeNotifier) Sound(p string)            { f.sounds = append(f.sounds, p) }
-func (f *fakeNotifier) Notify(title, body string) { f.bodies = append(f.bodies, title+": "+body) }
+func (f *fakeNotifier) Sound(p string) { f.sounds = append(f.sounds, p) }
+func (f *fakeNotifier) Notify(n Notice) {
+	f.bodies = append(f.bodies, n.Title+": "+n.Body)
+	f.notes = append(f.notes, n)
+}
 
 // Execute command trees as Tea does, without running timers or external I/O.
 func runActions(cmd tea.Cmd) {
@@ -1230,5 +1234,27 @@ func TestTUIHidesOlderTwinOnRosterRefresh(t *testing.T) {
 	}
 	if !hidden["old"] || hidden["new"] {
 		t.Fatalf("older twin must be hidden after the refresh: %v", hidden)
+	}
+}
+
+func TestAlertTabLocalOnly(t *testing.T) {
+	m, _, _, now := testModel(t)
+	n := &fakeNotifier{}
+	m.notifier = n
+	m.muted = false
+	m.alerts = Alerts{}
+	m.alerts.Tick(now, nil)
+	const guid = "0EB11E86-12BA-4739-B792-1F3699034011"
+	m.report = Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{{SessionID: "x@local", Name: "x", Kind: "peer"}, {SessionID: "z@local", Name: "z", Kind: "peer"}}},
+		Remote: []Host{{Host: "server", Sessions: []Row{{SessionID: "y@server", Name: "y", Kind: "peer"}}}}}
+	m.state = State{Sessions: map[string]Record{"x@local": {Ask: "q", Tab: guid}, "y@server": {Ask: "q", Tab: guid}, "z@local": {Ask: "q", Tab: guid + "'; touch x; '"}}}
+	m.rebuild()
+	runActions(m.alertCmd())
+	tabs := map[string]string{}
+	for _, nt := range n.notes {
+		tabs[nt.ID] = nt.Tab
+	}
+	if len(n.notes) != 3 || tabs["x@local"] != guid || tabs["y@server"] != "" || tabs["z@local"] != "" {
+		t.Fatal(n.notes)
 	}
 }

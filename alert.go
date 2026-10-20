@@ -12,10 +12,10 @@ import (
 )
 
 type AskInfo struct {
-	ID, Display, Text string
-	Since             time.Time
+	ID, Display, Text, Tab string
+	Since                  time.Time
 }
-type Action struct{ Kind, Title, Body string }
+type Action struct{ Kind, Title, Body, ID, Tab string }
 type Alerts struct {
 	initialized bool
 	muted       bool
@@ -49,7 +49,7 @@ func (a *Alerts) Tick(now time.Time, asks []AskInfo) []Action {
 	var actions []Action
 	emit := func(ask AskInfo) {
 		if !a.muted {
-			actions = append(actions, Action{Kind: "sound"}, Action{Kind: "notify", Title: uiAppName, Body: cleanText(ask.Display+uiNotifyAsks+ask.Text, 200)})
+			actions = append(actions, Action{Kind: "sound"}, Action{Kind: "notify", Title: uiAppName, Body: cleanText(ask.Display+uiNotifyAsks+ask.Text, 200), ID: ask.ID, Tab: ask.Tab})
 		}
 	}
 	newAsk := false
@@ -72,12 +72,15 @@ func (a *Alerts) Tick(now time.Time, asks []AskInfo) []Action {
 
 type Notifier interface {
 	Sound(path string)
-	Notify(title, body string)
+	Notify(Notice)
 }
+
+// Notice is one notification; Tab is an iTerm2 session GUID to select on click.
+type Notice struct{ Title, Body, ID, Tab string }
 type commandStarter func(*exec.Cmd)
 
-// macNotifier prefers terminal-notifier (click activates the terminal) and
-// falls back to osascript.
+// macNotifier prefers terminal-notifier (click selects the asker's iTerm2 tab,
+// else activates the terminal) and falls back to osascript.
 type macNotifier struct {
 	start        commandStarter
 	run          func(*exec.Cmd) (string, error)
@@ -124,10 +127,43 @@ func (n macNotifier) launch(name string, args ...string) {
 }
 func (n macNotifier) Sound(path string) { n.launch("afplay", path) }
 
-func (n macNotifier) terminalNotifierArgs(title, body string) []string {
-	args := []string{"-title", title, "-message", body, "-group", uiAppName}
-	if n.bundle != "" {
+// selectITermCommand runs under /bin/sh from terminal-notifier -execute. Only a
+// GUID that passes validITermGUID is interpolated (Notify can receive a Tab that
+// bypassed the protocol parser); anything else yields "".
+func selectITermCommand(guid string) string {
+	if !validITermGUID(guid) {
+		return ""
+	}
+	script := `tell application "iTerm2"
+repeat with w in windows
+repeat with t in tabs of w
+repeat with s in sessions of t
+if unique id of s is "` + guid + `" then
+select w
+select t
+select s
+end if
+end repeat
+end repeat
+end repeat
+activate
+end tell`
+	return "/usr/bin/osascript -e '" + script + "'"
+}
+func (n macNotifier) terminalNotifierArgs(nt Notice) []string {
+	group := uiAppName
+	if nt.ID != "" {
+		group += ":" + cleanText(nt.ID, 120)
+	}
+	args := []string{"-title", nt.Title, "-message", nt.Body, "-group", group}
+	cmd := selectITermCommand(nt.Tab)
+	// With a tab, -activate only for iTerm2 itself (same app the script raises); another
+	// terminal's -activate would race the script.
+	if n.bundle != "" && (cmd == "" || n.bundle == "com.googlecode.iterm2") {
 		args = append(args, "-activate", n.bundle)
+	}
+	if cmd != "" {
+		args = append(args, "-execute", cmd)
 	}
 	return args
 }
@@ -136,14 +172,14 @@ func (n macNotifier) terminalNotifierArgs(title, body string) []string {
 var notifierTimeout = 10 * time.Second
 
 // terminalNotify reports whether terminal-notifier showed the notification.
-func (n macNotifier) terminalNotify(title, body string) bool {
+func (n macNotifier) terminalNotify(nt Notice) bool {
 	run := n.run
 	if run == nil {
 		run = runCapture
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), notifierTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, n.notifierPath, n.terminalNotifierArgs(title, body)...)
+	cmd := exec.CommandContext(ctx, n.notifierPath, n.terminalNotifierArgs(nt)...)
 	cmd.WaitDelay = time.Second
 	out, err := run(cmd)
 	return err == nil && !strings.Contains(out, "not allowed") && !strings.Contains(out, "Could not request notification permission")
@@ -151,14 +187,14 @@ func (n macNotifier) terminalNotify(title, body string) bool {
 func (n macNotifier) osascript(title, body string) {
 	n.launch("osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", title, body)
 }
-func (n macNotifier) Notify(title, body string) {
+func (n macNotifier) Notify(nt Notice) {
 	if n.notifierPath == "" {
-		n.osascript(title, body)
+		n.osascript(nt.Title, nt.Body)
 		return
 	}
 	go func() {
-		if !n.terminalNotify(title, body) {
-			n.osascript(title, body)
+		if !n.terminalNotify(nt) {
+			n.osascript(nt.Title, nt.Body)
 		}
 	}()
 }

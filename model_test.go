@@ -212,3 +212,42 @@ func TestHideOlderTwinKeepsActive(t *testing.T) {
 		t.Fatal("peer with lanes hidden")
 	}
 }
+
+func TestSelfNameDisplay(t *testing.T) {
+	report, state, now := fixture(t)
+	report.Remote = []Host{{Host: "srv", Sessions: []Row{
+		{SessionID: "aaaaaaaa-1@srv", Product: "claude-peer", Kind: "peer"},
+		{SessionID: "bbbbbbbb-2@srv", Product: "claude-peer", Kind: "peer", Name: "rostername"},
+		{SessionID: "cccccccc-3@srv", Product: "claude-peer", Kind: "peer"},
+		{SessionID: "dddddddd-4@srv", Product: "claude-peer", Kind: "peer"},
+		{SessionID: "eeeeeeee-5@srv", Product: "claude-peer", Kind: "peer"},
+	}}}
+	state.Sessions["aaaaaaaa-1@srv"] = Record{Name: "solo-proj"}
+	state.Sessions["bbbbbbbb-2@srv"] = Record{Name: "ignored-self"}
+	state.Sessions["cccccccc-3@srv"] = Record{Name: "twin"}
+	state.Sessions["dddddddd-4@srv"] = Record{Name: "twin"}
+	got := Render(report, state, now, false)
+	for _, want := range []string{"solo-proj", "rostername", "twin · cccccccc", "twin · dddddddd", "claude · eeeeeeee"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "ignored-self") || strings.Contains(got, "solo-proj · ") {
+		t.Fatalf("unexpected in\n%s", got)
+	}
+}
+
+func TestSelfNameDisambiguatedFromHostSuffixedRosterName(t *testing.T) {
+	report, state, now := fixture(t)
+	report.Remote = []Host{{Host: "srv", Sessions: []Row{
+		{SessionID: "aaaaaaaa-1@srv", Product: "claude-peer", Kind: "peer", Name: "twin@srv"},
+		{SessionID: "bbbbbbbb-2@srv", Product: "claude-peer", Kind: "peer"},
+	}}}
+	state.Sessions["bbbbbbbb-2@srv"] = Record{Name: "twin"}
+	got := Render(report, state, now, false)
+	for _, want := range []string{"twin · aaaaaaaa", "twin · bbbbbbbb"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in\n%s", want, got)
+		}
+	}
+}
