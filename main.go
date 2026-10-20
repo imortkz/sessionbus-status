@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() { os.Exit(run(os.Args[1:])) }
@@ -46,6 +48,9 @@ func runWatch(args []string) int {
 	timeout := flags.Duration("roster-timeout", 10*time.Second, "roster command timeout (default max(interval, 10s))")
 	once := flags.Bool("once", false, "print one frame")
 	path := flags.String("state", defaultStatePath(), "state file")
+	groups := flags.String("g", "bus-status", "comma-separated shared groups")
+	muted := flags.Bool("no-sound", false, "mute sound and notifications")
+	sound := flags.String("sound", "/System/Library/Sounds/Glass.aiff", "notification sound path")
 	roster := flags.String("roster", "sessionbus roster --json", "roster command (space-separated)")
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -68,43 +73,33 @@ func runWatch(args []string) int {
 	defer cancel()
 	_, noColor := os.LookupEnv("NO_COLOR")
 	color := !noColor && isTerminal(os.Stdout)
-	var prev map[string]bool
-	for {
-		if ctx.Err() != nil {
-			return 0
-		}
+	if *once {
 		stdout, stderr, runErr := runRoster(ctx, command, *timeout)
 		if ctx.Err() != nil {
 			return 0
 		}
 		state, loadErr := loadState(*path)
-		now := time.Now()
-		frame := Frame(stdout, stderr, runErr, state, now, color)
+		frame := Frame(stdout, stderr, runErr, state, time.Now(), color)
 		if loadErr != nil {
 			frame += "Ошибка state: " + sanitize(loadErr.Error()) + "\n"
 		}
-		report, decodeErr := decodeReport(stdout)
-		if *once {
-			fmt.Fprint(os.Stdout, frame)
-			if decodeErr != nil {
-				return 1
-			}
-			return 0
+		fmt.Fprint(os.Stdout, frame)
+		if _, err := decodeReport(stdout); err != nil {
+			return 1
 		}
-		fmt.Fprint(os.Stdout, "\x1b[H\x1b[2J", frame)
-		bell, next := nextBell(prev, report, decodeErr, state)
-		if bell {
-			fmt.Fprint(os.Stdout, "\a")
-		}
-		prev = next
-		timer := time.NewTimer(*interval)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return 0
-		case <-timer.C:
-		}
+		return 0
 	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "bus-status:", err)
+		return 1
+	}
+	model := newModel(tuiConfig{ctx: ctx, cancel: cancel, statePath: *path, home: home, groups: *groups, sound: *sound, command: command, interval: *interval, timeout: *timeout, muted: *muted})
+	if _, err := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx)).Run(); err != nil && ctx.Err() == nil {
+		fmt.Fprintln(os.Stderr, "bus-status:", err)
+		return 1
+	}
+	return 0
 }
 
 // Failed roster ticks provide no evidence that an existing ask disappeared.

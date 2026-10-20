@@ -49,20 +49,27 @@ func runServe(args []string) int {
 		fmt.Fprintln(os.Stderr, "bus-status: unexpected serve arguments")
 		return 2
 	}
-	state := loadCollectorState(*path, os.Stderr)
-	c := &collector{path: *path, state: state}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	if err := startCollector(ctx, *path, *groups); err != nil {
+		fmt.Fprintln(os.Stderr, "bus-status:", err)
+		return 1
+	}
+	return 0
+}
+
+func startCollector(ctx context.Context, path, groups string) error {
+	state := loadCollectorState(path, os.Stderr)
+	c := &collector{path: path, state: state}
 	var shared []string
-	for _, g := range strings.Split(*groups, ",") {
+	for _, g := range strings.Split(groups, ",") {
 		if g = strings.TrimSpace(g); g != "" {
 			shared = append(shared, g)
 		}
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 	peer, err := sdk.ConnectPeerContext(ctx, sdk.PeerIdentity{Product: "bus-status", SessionID: "bus-status", Name: "bus-status", Groups: shared, Info: map[string]any{}}, c.deliver)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "bus-status:", err)
-		return 1
+		return err
 	}
 	defer peer.Shutdown()
 	ready := peer.Ready()
@@ -73,13 +80,12 @@ func runServe(args []string) int {
 			ready = nil
 		case <-ctx.Done():
 			peer.Shutdown()
-			return 0
+			return nil
 		case <-peer.Closed():
 			if ctx.Err() != nil {
-				return 0
+				return nil
 			}
-			fmt.Fprintln(os.Stderr, "bus-status:", peer.Err())
-			return 1
+			return peer.Err()
 		}
 	}
 }
