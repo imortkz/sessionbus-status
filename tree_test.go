@@ -102,3 +102,39 @@ func TestRenderSanitizesInputs(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderStatusOnlySanitization(t *testing.T) {
+	report, state, now := fixture(t)
+	state.Sessions["developer@macbook"] = Record{Status: "working\x1b[31m\a\x00\u009b"}
+	got := Render(report, state, now, false)
+	if !strings.Contains(got, "working[31m") {
+		t.Fatalf("missing status: %q", got)
+	}
+	for _, r := range got {
+		if r != '\n' && (r < 32 || r == 127 || r >= 128 && r <= 159) {
+			t.Fatalf("status leaked %U: %q", r, got)
+		}
+	}
+}
+func TestRenderRunningBeforeName(t *testing.T) {
+	report, _, now := fixture(t)
+	report.Local.Sessions = []Row{
+		{SessionID: "idle", Name: "aaa-idle", Product: "codex-peer"},
+		{SessionID: "running", Name: "zzz-running", Product: "codex-peer", Running: true},
+	}
+	got := Render(report, State{}, now, false)
+	if a, b := strings.Index(got, "● zzz-running"), strings.Index(got, "○ aaa-idle"); a < 0 || b < 0 || a > b {
+		t.Fatalf("running must precede idle regardless of name: %s", got)
+	}
+}
+func TestFrameErrorFallbackText(t *testing.T) {
+	_, state, now := fixture(t)
+	got := Frame([]byte("invalid"), []byte("  stderr diagnosis\x1b\n"), errors.New("run diagnosis"), state, now, false)
+	if !strings.Contains(got, "Ошибка roster: stderr diagnosis\n") || strings.Contains(got, "run diagnosis") {
+		t.Fatalf("stderr fallback: %q", got)
+	}
+	got = Frame([]byte("invalid"), nil, errors.New("run diagnosis"), state, now, false)
+	if !strings.Contains(got, "Ошибка roster: run diagnosis\n") {
+		t.Fatalf("run error fallback: %q", got)
+	}
+}
