@@ -1,0 +1,2 @@
+{"type":"assistant","timestamp":"2026-10-20T10:00:00Z","message":{"content":[{"type":"text","text":"hello\u001b]0;osc\u0007\u202e"},{"type":"thinking","thinking":"thought"},{"type":"tool_use","name":"Bash","input":{"command":"pwd"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","content":[{"type":"text","text":"result"}]},{"type":"text","text":"prompt"}]}}
