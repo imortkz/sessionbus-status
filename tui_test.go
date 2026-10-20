@@ -1211,3 +1211,24 @@ func TestNotificationNamesMatchSessionColumn(t *testing.T) {
 		t.Fatal(n.bodies)
 	}
 }
+
+func TestTUIHidesOlderTwinOnRosterRefresh(t *testing.T) {
+	now := time.Now()
+	m := newModel(tuiConfig{ctx: context.Background(), statePath: t.TempDir() + "/missing", home: t.TempDir(), groups: "bus-status", interval: time.Second, timeout: time.Second, muted: true})
+	m.now = func() time.Time { return now }
+	m.collectorDecided = true
+	m.collectorMode = uiCollectorExternal
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m.Update(stateMsg{state: State{Sessions: map[string]Record{"old": {Status: "working", UpdatedAt: now}}}})
+	row := func(id string) Row { return Row{SessionID: id, Name: "same", Kind: "peer", Connected: true} }
+	m.Update(rosterMsg{report: Report{Local: Host{Host: "local", Sessions: []Row{row("old")}}}})
+	now = now.Add(time.Minute)
+	m.Update(rosterMsg{report: Report{Local: Host{Host: "local", Sessions: []Row{row("old"), row("new")}}}})
+	hidden := map[string]bool{}
+	for _, n := range m.tree[0].Nodes {
+		hidden[n.ID] = n.HiddenDuplicate
+	}
+	if !hidden["old"] || hidden["new"] {
+		t.Fatalf("older twin must be hidden after the refresh: %v", hidden)
+	}
+}
