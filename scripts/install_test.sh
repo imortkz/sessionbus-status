@@ -56,6 +56,22 @@ tar -tzf "$evil/$asset" | grep -q '^\.\./' || fail 'evil archive lacks ../ membe
 sums "$evil" "$asset"
 expect_fail 'unsafe member' 'Unsafe archive member' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.1 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$evil"
 
+# symlink member
+link="$work/link"; mkdir -p "$link/src"
+printf 'sessionbus-status\n' > "$link/src/ROLE"
+ln -s /bin/sh "$link/src/install"
+tar -czf "$link/$asset" -C "$link/src" ROLE install
+sums "$link" "$asset"
+expect_fail 'symlink member' 'Unsafe archive member' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.1 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$link"
+
+# wrong role
+role="$work/role"; mkdir -p "$role/src"
+printf 'other\n' > "$role/src/ROLE"
+printf '#!/bin/sh\nexit 0\n' > "$role/src/install"
+tar -czf "$role/$asset" -C "$role/src" ROLE install
+sums "$role" "$asset"
+expect_fail 'wrong role' 'Wrong release role' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.1 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$role"
+
 # latest: fake curl serves the releases list; gh is reported unauthenticated
 fakebin="$work/fakebin"; mkdir "$fakebin"
 cat > "$fakebin/gh" <<'SH'
