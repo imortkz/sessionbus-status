@@ -1245,16 +1245,16 @@ func TestAlertTabLocalOnly(t *testing.T) {
 	m.alerts = Alerts{}
 	m.alerts.Tick(now, nil)
 	const guid = "0EB11E86-12BA-4739-B792-1F3699034011"
-	m.report = Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{{SessionID: "x@local", Name: "x", Kind: "peer"}}},
+	m.report = Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{{SessionID: "x@local", Name: "x", Kind: "peer"}, {SessionID: "z@local", Name: "z", Kind: "peer"}}},
 		Remote: []Host{{Host: "server", Sessions: []Row{{SessionID: "y@server", Name: "y", Kind: "peer"}}}}}
-	m.state = State{Sessions: map[string]Record{"x@local": {Ask: "q", Tab: guid}, "y@server": {Ask: "q", Tab: guid}}}
+	m.state = State{Sessions: map[string]Record{"x@local": {Ask: "q", Tab: guid}, "y@server": {Ask: "q", Tab: guid}, "z@local": {Ask: "q", Tab: guid + "'; touch x; '"}}}
 	m.rebuild()
 	runActions(m.alertCmd())
 	tabs := map[string]string{}
 	for _, nt := range n.notes {
 		tabs[nt.ID] = nt.Tab
 	}
-	if len(n.notes) != 2 || tabs["x@local"] != guid || tabs["y@server"] != "" {
+	if len(n.notes) != 3 || tabs["x@local"] != guid || tabs["y@server"] != "" || tabs["z@local"] != "" {
 		t.Fatal(n.notes)
 	}
 }
