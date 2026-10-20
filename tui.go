@@ -516,6 +516,11 @@ func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 				m.pane = "log"
 			}
 		case "tab":
+			if m.pane == "logFull" {
+				m.pane = "log"
+				m.focus = "tree"
+				break
+			}
 			if m.focus == "tree" {
 				m.focus = "log"
 				if m.pane == "history" {

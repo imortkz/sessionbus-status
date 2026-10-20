@@ -1030,3 +1030,15 @@ func TestRosterEligibleAlertsAndCount(t *testing.T) {
 		t.Fatal("ghost reminders", n.bodies)
 	}
 }
+
+func TestFullLogTabDoesNotHideTreeFocus(t *testing.T) {
+	m, _, _, _ := testModel(t)
+	press(m, "L")
+	press(m, "tab")
+	if m.pane == "logFull" && m.focus == "tree" {
+		t.Fatal("focused invisible tree")
+	}
+	if m.focus == "tree" && !strings.Contains(stripANSI(m.View()), uiSession) {
+		t.Fatal("tree focus without tree", m.View())
+	}
+}
