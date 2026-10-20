@@ -264,6 +264,7 @@ func TestCollectorDecision(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			m := newModel(tuiConfig{ctx: ctx, groups: "bus-status,project", statePath: "test-state", muted: true, interval: time.Second})
+			m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 			m.startCollector = func(got context.Context, p, g string) error {
 				called++
 				if got != ctx || p != "test-state" || g != "bus-status,project" {
@@ -384,5 +385,19 @@ func TestPeerActivityRefresh(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	if !strings.Contains(stripANSI(m.View()), "◐ работают lanes") {
 		t.Fatal(m.View())
+	}
+}
+
+func TestInitialWindowSize(t *testing.T) {
+	m := newModel(tuiConfig{muted: true})
+	if got := m.View(); got != "" {
+		t.Fatalf("frame before size: %q", got)
+	}
+	if m.collectorMode != "проверяю…" {
+		t.Fatal(m.collectorMode)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	if got := len(strings.Split(m.View(), "\n")); got != 20 {
+		t.Fatal("frame height", got)
 	}
 }

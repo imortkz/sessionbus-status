@@ -60,6 +60,7 @@ type Model struct {
 	collectorMode                  string
 	collectorDecided, ownCollector bool
 	width, height                  int
+	sized                          bool
 	viewport                       viewport.Model
 	help                           help.Model
 	keys                           keyMap
@@ -88,7 +89,7 @@ func newModel(c tuiConfig) *Model {
 	if c.timeout <= 0 {
 		c.timeout = 10 * time.Second
 	}
-	m := &Model{config: c, collapsed: map[string]bool{}, pane: "history", muted: c.muted, collectorMode: "не найден", width: 100, height: 30, viewport: viewport.New(98, 8), help: help.New(), now: time.Now, notifier: macNotifier{}, startCollector: startCollector}
+	m := &Model{config: c, collapsed: map[string]bool{}, pane: "history", muted: c.muted, collectorMode: "проверяю…", width: 100, height: 30, viewport: viewport.New(98, 8), help: help.New(), now: time.Now, notifier: macNotifier{}, startCollector: startCollector}
 	m.keys = keyMap{
 		key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "выбор")),
 		key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←→", "свернуть")),
@@ -295,6 +296,7 @@ func (m *Model) collectorDecision() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		m.sized = true
 		m.width = max(4, msg.Width)
 		m.height = max(4, msg.Height)
 	case rosterTick:
@@ -459,6 +461,9 @@ func logLimit(kind string) int {
 	}
 }
 func (m *Model) View() string {
+	if !m.sized {
+		return ""
+	}
 	width := max(2, m.width-2)
 	height := max(2, m.height-2)
 	helpLines := m.helpLines(width)
