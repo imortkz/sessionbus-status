@@ -58,6 +58,8 @@ type Model struct {
 	pane                           string
 	filter, muted                  bool
 	collectorMode                  string
+	collectorErr                   string
+	collectorRetryAt               time.Time
 	collectorDecided, ownCollector bool
 	width, height                  int
 	sized                          bool
@@ -283,7 +285,11 @@ func (m *Model) collectorDecision() tea.Cmd {
 		}
 		return nil
 	}
+	if !external && m.now().Before(m.collectorRetryAt) {
+		return nil
+	}
 	m.collectorDecided = true
+	m.collectorErr = ""
 	if external {
 		m.collectorMode = "внешний"
 		return nil
@@ -329,6 +335,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case collectorMsg:
 		if m.config.ctx.Err() == nil {
 			m.collectorMode = "не найден"
+			m.ownCollector = false
+			m.collectorDecided = false
+			m.collectorRetryAt = m.now().Add(10 * time.Second)
+			if msg.err != nil {
+				m.collectorErr = cleanText(msg.err.Error(), 200)
+			} else {
+				m.collectorErr = "сборщик остановлен"
+			}
 		}
 	case logMsg:
 		if msg.gen != m.generation {
@@ -498,6 +512,9 @@ func (m *Model) View() string {
 	}
 	if m.stateErr != "" {
 		body = append(body, "Ошибка state: "+m.stateErr)
+	}
+	if m.collectorErr != "" {
+		body = append(body, "Ошибка сборщика: "+m.collectorErr)
 	}
 	available := max(1, bodyHeight-len(body))
 	paneHeight := min(available, max(5, bodyHeight*40/100))

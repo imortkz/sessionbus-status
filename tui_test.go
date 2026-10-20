@@ -401,3 +401,42 @@ func TestInitialWindowSize(t *testing.T) {
 		t.Fatal("frame height", got)
 	}
 }
+
+func TestCollectorFailureRetry(t *testing.T) {
+	m, _, _, now := testModel(t)
+	m.collectorDecided = false
+	m.ownCollector = false
+	m.report.Local.Sessions = nil
+	calls := 0
+	m.startCollector = func(context.Context, string, string) error {
+		calls++
+		return fmt.Errorf("offline\x1b\u202e%s", strings.Repeat("x", 250))
+	}
+	cmd := m.collectorDecision()
+	m.Update(cmd())
+	if m.collectorDecided || m.ownCollector || !strings.Contains(stripANSI(m.View()), "Ошибка сборщика: offline") {
+		t.Fatal(m.View())
+	}
+	if len([]rune(m.collectorErr)) != 200 || strings.ContainsAny(m.collectorErr, "\x1b\u202e") {
+		t.Fatal(m.collectorErr)
+	}
+	now = now.Add(9 * time.Second)
+	m.now = func() time.Time { return now }
+	if cmd = m.collectorDecision(); cmd != nil {
+		t.Fatal("early retry")
+	}
+	now = now.Add(time.Second)
+	cmd = m.collectorDecision()
+	if cmd == nil {
+		t.Fatal("retry missing")
+	}
+	m.Update(cmd())
+	if calls != 2 {
+		t.Fatal(calls)
+	}
+	m.report.Local.Sessions = []Row{{Product: "bus-status", Connected: true}}
+	m.collectorDecision()
+	if m.collectorMode != "внешний" || m.collectorErr != "" {
+		t.Fatal(m.collectorMode, m.collectorErr)
+	}
+}
