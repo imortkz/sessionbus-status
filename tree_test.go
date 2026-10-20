@@ -23,6 +23,7 @@ func fixture(t *testing.T) (Report, State, time.Time) {
 		"master@macbook":     {Model: "claude-opus-5-5", Ask: "одобрить PLAN bus-status", UpdatedAt: now.Add(-3 * time.Minute)},
 		"developer@macbook":  {Model: "gpt-6.1-sol", Status: "волна 1: пишу сборщик", UpdatedAt: now.Add(-45 * time.Second)},
 		"researcher@macbook": {Model: "claude-sonnet-5-5"},
+		"bus-status@macbook": {Ask: "collector must stay hidden"},
 	}}
 	return report, state, now
 }
@@ -136,5 +137,15 @@ func TestFrameErrorFallbackText(t *testing.T) {
 	got = Frame([]byte("invalid"), nil, errors.New("run diagnosis"), state, now, false)
 	if !strings.Contains(got, "Ошибка roster: run diagnosis\n") {
 		t.Fatalf("run error fallback: %q", got)
+	}
+}
+
+func TestRenderOmitsRemoteCollector(t *testing.T) {
+	report, state, now := fixture(t)
+	report.Remote = append(report.Remote, Host{Host: "remote", Sessions: []Row{{SessionID: "collector-remote", Name: "hidden-remote", Product: "bus-status"}}})
+	state.Sessions["collector-remote"] = Record{Ask: "hidden ask"}
+	got := Render(report, state, now, false)
+	if strings.Contains(got, "hidden-remote") || strings.Contains(got, "collector must stay hidden") || len(askIDs(report, state)) != 1 {
+		t.Fatalf("collector is visible: %s", got)
 	}
 }

@@ -1,10 +1,64 @@
 {
-  "schema": "sessionbus.roster.v1", "federation": "fixture", "complete": true,
-  "local": {"host":"macbook", "products":["claude-peer","codex-peer"], "sessions":[
-    {"session_id":"master@macbook","name":"openclaw-peer@macbook","kind":"peer","product":"claude-peer","connected":true,"running":false},
-    {"session_id":"researcher@macbook","name":"researcher-bus-status@macbook","kind":"lane","product":"claude-peer","owner":"master@macbook","connected":true,"running":false},
-    {"session_id":"developer@macbook","name":"developer-bus-status@macbook","kind":"lane","product":"codex-peer","owner":"master@macbook","connected":true,"running":true},
-    {"session_id":"orphan@macbook","name":"orphan@macbook","kind":"lane","product":"sessionbus-dsh","owner":"absent@macbook","connected":true,"running":true}
-  ]},
-  "remote":[{"host":"office","error":"offline","sessions":[]}]
+  "schema": "sessionbus.roster.v1",
+  "federation": "fixture",
+  "complete": true,
+  "local": {
+    "host": "macbook",
+    "products": [
+      "claude-peer",
+      "codex-peer"
+    ],
+    "sessions": [
+      {
+        "session_id": "master@macbook",
+        "name": "openclaw-peer@macbook",
+        "kind": "peer",
+        "product": "claude-peer",
+        "connected": true,
+        "running": false
+      },
+      {
+        "session_id": "researcher@macbook",
+        "name": "researcher-bus-status@macbook",
+        "kind": "lane",
+        "product": "claude-peer",
+        "owner": "master@macbook",
+        "connected": true,
+        "running": false
+      },
+      {
+        "session_id": "developer@macbook",
+        "name": "developer-bus-status@macbook",
+        "kind": "lane",
+        "product": "codex-peer",
+        "owner": "master@macbook",
+        "connected": true,
+        "running": true
+      },
+      {
+        "session_id": "orphan@macbook",
+        "name": "orphan@macbook",
+        "kind": "lane",
+        "product": "sessionbus-dsh",
+        "owner": "absent@macbook",
+        "connected": true,
+        "running": true
+      },
+      {
+        "session_id": "bus-status@macbook",
+        "name": "bus-status@macbook",
+        "kind": "peer",
+        "product": "bus-status",
+        "connected": true,
+        "running": false
+      }
+    ]
+  },
+  "remote": [
+    {
+      "host": "office",
+      "error": "offline",
+      "sessions": []
+    }
+  ]
 }

@@ -52,7 +52,7 @@ func askIDs(report Report, state State) map[string]bool {
 			continue
 		}
 		for _, row := range host.Sessions {
-			if sanitize(state.Sessions[row.SessionID].Ask) != "" {
+			if row.Product != "bus-status" && sanitize(state.Sessions[row.SessionID].Ask) != "" {
 				ids[row.SessionID] = true
 			}
 		}
@@ -107,9 +107,15 @@ func renderHost(out *strings.Builder, host Host, state State, now time.Time, col
 		fmt.Fprintf(out, "── %s\n", sanitize(host.Host))
 	}
 	rows := make(map[string]Row)
+	visible := make([]Row, 0, len(host.Sessions))
 	for _, row := range host.Sessions {
+		if row.Product == "bus-status" {
+			continue
+		}
 		rows[row.SessionID] = row
+		visible = append(visible, row)
 	}
+	host.Sessions = visible
 	children := make(map[string][]Row)
 	var roots []Row
 	for _, row := range host.Sessions {
