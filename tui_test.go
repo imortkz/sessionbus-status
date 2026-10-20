@@ -940,7 +940,7 @@ func TestCollectorDiagnosticsStayOffTerminal(t *testing.T) {
 		defer func() { cancel(); <-done }()
 		<-started
 		m.Update(m.pollCollectorDiagnostics()())
-		if !strings.Contains(stripANSI(m.View()), uiCollector+uiCollectorOwn+" (connected)") || m.collectorLast != "connected" {
+		if !strings.Contains(stripANSI(m.View()), uiCollector+uiCollectorOwn) || m.collectorLast != "connected" {
 			t.Fatal(m.View())
 		}
 		// Exercise the actual state recovery and delivery failure paths with this writer.
@@ -1128,5 +1128,31 @@ func TestLogFocusHelpIncludesPaneToggle(t *testing.T) {
 	press(m, "l")
 	if m.pane != "history" || m.focus != "tree" {
 		t.Fatal(m.pane, m.focus)
+	}
+}
+
+func TestCollectorErrorHeaderKeepsAlerts(t *testing.T) {
+	for _, width := range []int{60, 100} {
+		m, _, s, _ := testModel(t)
+		rec := s.Sessions["developer@macbook"]
+		rec.Ask = "second question"
+		s.Sessions["developer@macbook"] = rec
+		m.Update(stateMsg{state: s})
+		m.Update(collectorMsg{err: fmt.Errorf("%s", strings.Repeat("x", 300))})
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 20})
+		for _, muted := range []bool{true, false} {
+			m.muted = muted
+			header := strings.Split(stripANSI(m.View()), "\n")[1]
+			icon := "🔈"
+			if muted {
+				icon = "🔇"
+			}
+			if !strings.Contains(header, "⚠ 2") || !strings.Contains(header, icon) || !strings.Contains(header, uiCollector+"error") || strings.Contains(header, "xxx") {
+				t.Fatal("critical header content lost", width, header)
+			}
+			if !strings.Contains(stripANSI(m.View()), uiCollectorError+"xxx") {
+				t.Fatal("error body missing", m.View())
+			}
+		}
 	}
 }

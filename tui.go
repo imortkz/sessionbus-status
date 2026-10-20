@@ -604,9 +604,7 @@ func (m *Model) View() string {
 	}
 	collector := uiCollector + m.collectorMode
 	if m.collectorErr != "" {
-		collector = uiCollectorError + m.collectorErr
-	} else if m.ownCollector && m.collectorLast == uiCollectorConnected {
-		collector += " (" + uiCollectorConnected + ")"
+		collector = uiCollector + uiCollectorErrorState
 	}
 	if m.collectorMode == uiCollectorMissing {
 		collector = "\x1b[31m" + collector + "\x1b[0m"
@@ -629,6 +627,12 @@ func (m *Model) View() string {
 	}
 	if lipgloss.Width(head) > width && count > 0 {
 		head = strings.Replace(head, uiWaitingSuffix, "", 1)
+	}
+	if lipgloss.Width(head) > width {
+		head = core
+		if count > 0 {
+			head += fmt.Sprintf(" · ⚠ %d", count)
+		}
 	}
 	bodyHeight := max(1, height-len(helpLines)-1)
 	var body []string

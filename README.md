@@ -18,7 +18,7 @@ bin/bus-status -g bus-status,openclaw-peer
 
 On the first successful roster refresh, a connected local `bus-status` collector makes the TUI display-only (`collector: external`). Otherwise the TUI starts its own collector (`collector: own`) and stops it on exit. An external collector disappearing changes the header to `collector: not found`; restart the TUI to make a new collector decision.
 
-In TUI mode, collector diagnostics append to `collector.log` beside the state file. The header shows `collector: own (connected)` after connection, or the latest collector error. Headless `serve` keeps writing diagnostics to stderr.
+In TUI mode, collector diagnostics append to `collector.log` beside the state file. The header keeps a short collector state (`own`, `external`, `checking…`, `not found` or `error`) so the sound icon and waiting count remain visible. Full collector errors appear in the body. Headless `serve` keeps writing diagnostics to stderr.
 
 Senders must share a group with the collector. Launch an interactive master with `-g bus-status` (for example, `claude-peer -g openclaw-peer -g bus-status`); lanes join through `extra_groups`. Messages go directly to `bus-status@<host>`, so group membership does not give other peers extra turns. Both the TUI and headless collector accept comma-separated groups through `-g` (default `bus-status`).
 
