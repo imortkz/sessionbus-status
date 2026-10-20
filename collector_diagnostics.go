@@ -17,6 +17,8 @@ type collectorDiagnostics struct {
 	dirty         bool
 }
 
+const collectorLogLimit = 1 << 20
+
 func (d *collectorDiagnostics) Write(p []byte) (int, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -27,30 +29,44 @@ func (d *collectorDiagnostics) Write(p []byte) (int, error) {
 			break
 		}
 		d.pending = rest
-		if line = cleanText(line, 200); line != "" {
+		line = cleanText(line, 200)
+		if line != "" {
 			d.last = strings.TrimPrefix(line, uiAppName+": ")
 			d.dirty = true
 		}
-	}
-	n := 0
-	err := os.MkdirAll(filepath.Dir(d.path), 0700)
-	if err == nil {
-		var f *os.File
-		f, err = os.OpenFile(d.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-		if err == nil {
-			n, err = f.Write(p)
-			closeErr := f.Close()
-			if err == nil {
-				err = closeErr
-			}
+		if err := d.appendLine(line + "\n"); err != nil {
+			d.last = cleanText(uiDiagnosticLogError+err.Error(), 200)
+			d.dirty = true
+			return 0, err
 		}
 	}
-	if err != nil {
-		d.last = cleanText(uiDiagnosticLogError+err.Error(), 200)
-		d.dirty = true
-		return n, err
-	}
 	return len(p), nil
+}
+
+// Rotate before appending a complete cleaned line, retaining just one generation.
+func (d *collectorDiagnostics) appendLine(line string) error {
+	if err := os.MkdirAll(filepath.Dir(d.path), 0700); err != nil {
+		return err
+	}
+	info, err := os.Stat(d.path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err == nil && info.Size()+int64(len(line)) > collectorLogLimit {
+		if err = os.Rename(d.path, d.path+".1"); err != nil {
+			return err
+		}
+	}
+	f, err := os.OpenFile(d.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	_, err = f.WriteString(line)
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
 }
 func (d *collectorDiagnostics) take() string {
 	d.mu.Lock()
