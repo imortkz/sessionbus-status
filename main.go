@@ -59,7 +59,6 @@ func runWatch(args []string) int {
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	migrateDefaultState(flags, *path, os.Stderr)
 	timeoutSet := false
 	flags.Visit(func(f *flag.Flag) {
 		if f.Name == "roster-timeout" {
@@ -74,6 +73,7 @@ func runWatch(args []string) int {
 		fmt.Fprintln(os.Stderr, uiAppName+": expected a roster command and positive interval/roster-timeout")
 		return 2
 	}
+	migrateDefaultState(flags, *path, os.Stderr)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	_, noColor := os.LookupEnv("NO_COLOR")

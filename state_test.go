@@ -204,3 +204,13 @@ func TestLegacyStateMigrationMissingOldIsNoop(t *testing.T) {
 		t.Fatalf("directory created: %v", err)
 	}
 }
+
+func TestLegacyStateNotMigratedOnInvalidArgs(t *testing.T) {
+	legacyFixture(t, `{"old":1}`)
+	if code := run([]string{"-interval", "0"}); code != 2 {
+		t.Fatalf("exit %d", code)
+	}
+	if _, err := os.Stat(defaultStatePath()); !os.IsNotExist(err) {
+		t.Fatalf("migrated despite invalid arguments: %v", err)
+	}
+}
