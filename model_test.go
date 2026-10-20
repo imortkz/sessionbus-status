@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -30,7 +31,7 @@ func TestBuildTree(t *testing.T) {
 	if roots[0].ID != "aaaaaaaa-1" || !roots[0].HasAskBelow || roots[1].ID != "bbbbbbbb-2" {
 		t.Fatal(roots)
 	}
-	if roots[0].Display != "same · aaaaaaaa" || roots[1].Display != "same · bbbbbbbb" || !roots[0].Stale || roots[1].Stale {
+	if roots[0].Display != "same · aaaaaaaa" || roots[1].Display != "same · bbbbbbbb" || roots[0].Age != "11m" || roots[1].Age != "11m" {
 		t.Fatal(roots[0], roots[1])
 	}
 	if len(roots[0].Children) != 1 || !roots[0].Children[0].Ask || roots[0].Children[0].Line != uiWaiting+"approve" {
@@ -62,14 +63,13 @@ func TestPeerActivity(t *testing.T) {
 		ask, ownRunning, laneRunning bool
 		mtime                        time.Time
 		want                         Activity
-		stale                        bool
 	}{
 		{name: "running descendant", laneRunning: true, want: ActivityLanes},
 		{name: "fresh own log", laneRunning: true, mtime: now.Add(-30 * time.Second), want: ActivityLive},
 		{name: "ask wins", ask: true, laneRunning: true, mtime: now, want: ActivityAsk},
-		{name: "idle lanes", want: ActivityIdle, stale: true},
-		{name: "old log", mtime: now.Add(-31 * time.Second), want: ActivityIdle, stale: true},
-		{name: "peer running ignored", ownRunning: true, want: ActivityIdle, stale: true},
+		{name: "idle lanes", want: ActivityIdle},
+		{name: "old log", mtime: now.Add(-31 * time.Second), want: ActivityIdle},
+		{name: "peer running ignored", ownRunning: true, want: ActivityIdle},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			r := Report{Local: Host{Host: "local", Sessions: []Row{
@@ -84,8 +84,8 @@ func TestPeerActivity(t *testing.T) {
 				s.Sessions["peer"] = rec
 			}
 			n := BuildTree(r, s, now, map[string]time.Time{"peer": tt.mtime})[0].Nodes[0]
-			if n.Activity != tt.want || n.Stale != tt.stale {
-				t.Fatalf("activity=%s stale=%v", n.Activity, n.Stale)
+			if n.Activity != tt.want || n.Age != "1h" {
+				t.Fatalf("activity=%s age=%s", n.Activity, n.Age)
 			}
 			if tt.laneRunning && n.Children[0].Children[0].Activity != ActivityLive {
 				t.Fatal("lane running rule changed")
@@ -141,5 +141,11 @@ func TestHiddenDuplicatePeers(t *testing.T) {
 	r.Remote = []Host{{Host: "remote", Sessions: []Row{{SessionID: "remote", Name: "same", Kind: "peer"}}}}
 	if BuildTree(r, s, now, nil)[1].Nodes[0].HiddenDuplicate {
 		t.Fatal("cross-host duplicate hidden")
+	}
+}
+
+func TestNodeHasNoStaleFlag(t *testing.T) {
+	if _, exists := reflect.TypeOf(Node{}).FieldByName("Stale"); exists {
+		t.Fatal("dead Stale field remains")
 	}
 }

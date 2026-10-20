@@ -27,7 +27,7 @@ type Node struct {
 	ID, Display, Harness, Model, Line string
 	Name                              string
 	Lane                              bool
-	Ask, Running, Stale               bool
+	Ask, Running                      bool
 	Age                               string
 	Children                          []*Node
 	HasAskBelow                       bool
@@ -136,7 +136,6 @@ func BuildTree(report Report, state State, now time.Time, activity map[string]ti
 			}
 			if !rec.UpdatedAt.IsZero() {
 				n.Age = age(now.Sub(rec.UpdatedAt))
-				n.Stale = !live && !lanes && now.Sub(rec.UpdatedAt) > 10*time.Minute
 			}
 			nodes[id] = n
 		}
