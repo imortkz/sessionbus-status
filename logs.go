@@ -65,7 +65,7 @@ type LogLine struct {
 type LogReader struct {
 	path, kind string
 	offset     int64
-	seen       int
+	seen       int64
 	size       int64
 }
 
@@ -91,17 +91,46 @@ func (r *LogReader) Read() ([]LogLine, error) {
 			return nil, err
 		}
 		defer dec.Close()
+		if r.seen > 0 {
+			if _, err = io.CopyN(io.Discard, dec, r.seen); err != nil {
+				if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+					return nil, nil
+				}
+				return nil, err
+			}
+		}
 		data, err = io.ReadAll(dec)
 		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
 	} else {
+		dropPartial := false
+		if r.offset == 0 && info.Size() > 256*1024 {
+			r.offset = info.Size() - 256*1024
+			if _, err = f.Seek(r.offset-1, io.SeekStart); err != nil {
+				return nil, err
+			}
+			var prev [1]byte
+			if _, err = f.Read(prev[:]); err != nil {
+				return nil, err
+			}
+			dropPartial = prev[0] != '\n'
+		}
 		if _, err = f.Seek(r.offset, io.SeekStart); err != nil {
 			return nil, err
 		}
 		data, err = io.ReadAll(f)
 		if err != nil {
 			return nil, err
+		}
+		if dropPartial {
+			i := bytes.IndexByte(data, '\n')
+			if i < 0 {
+				r.offset += int64(len(data))
+				return nil, nil
+			}
+			r.offset += int64(i + 1)
+			data = data[i+1:]
 		}
 	}
 	end := bytes.LastIndexByte(data, '\n')
@@ -112,17 +141,12 @@ func (r *LogReader) Read() ([]LogLine, error) {
 	var out []LogLine
 	records := bytes.Split(data, []byte{'\n'})
 	records = records[:len(records)-1]
-	start := 0
 	if r.kind == "dsh" {
-		if len(records) < r.seen {
-			r.seen = 0
-		}
-		start = r.seen
-		r.seen = len(records)
+		r.seen += int64(len(data))
 	} else {
 		r.offset += int64(len(data))
 	}
-	for _, record := range records[start:] {
+	for _, record := range records {
 		out = append(out, parseLog(r.kind, record)...)
 	}
 	return out, nil

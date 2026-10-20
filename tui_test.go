@@ -519,3 +519,21 @@ func TestAlertsWaitForInitialState(t *testing.T) {
 		t.Fatal("initial state asks fired", n)
 	}
 }
+
+func TestDSHReadInterval(t *testing.T) {
+	m, _, _, now := testModel(t)
+	m.pane = "log"
+	m.reader = &LogReader{kind: "dsh"}
+	m.readLog = func(r *LogReader, _ visibleNode) (*LogReader, []LogLine, error) { return r, nil, nil }
+	cmd := m.requestLog()
+	m.Update(cmd())
+	now = now.Add(2 * time.Second)
+	m.now = func() time.Time { return now }
+	if cmd = m.requestLog(); cmd != nil {
+		t.Fatal("DSH read too frequent")
+	}
+	now = now.Add(time.Second)
+	if cmd = m.requestLog(); cmd == nil {
+		t.Fatal("DSH read not scheduled")
+	}
+}

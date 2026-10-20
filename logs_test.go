@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"github.com/klauspost/compress/zstd"
 	"os"
 	"path/filepath"
@@ -157,5 +158,36 @@ func TestLogActive(t *testing.T) {
 	}
 	if _, err := LogActive(home, "missing", "unknown", now, 30*time.Second); err == nil {
 		t.Fatal("missing log accepted")
+	}
+}
+
+func TestParseTailAndDSHByteOffset(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "large.jsonl")
+	record := []byte("{\"type\":\"event_msg\",\"payload\":{\"type\":\"agent_message\",\"message\":\"old\"}}\n")
+	data := bytes.Repeat(record, 10000)
+	data = append(data, []byte("{\"type\":\"event_msg\",\"payload\":{\"type\":\"agent_message\",\"message\":\"tail\"}}\n")...)
+	putLog(t, p, data)
+	r := LogReader{path: p, kind: "codex"}
+	lines, err := r.Read()
+	if err != nil || len(lines) == 0 || len(lines) >= 10000 || lines[len(lines)-1].Text != "tail" {
+		t.Fatal(len(lines), err)
+	}
+	if r.offset != int64(len(data)) {
+		t.Fatal(r.offset)
+	}
+	enc, _ := zstd.NewWriter(nil)
+	defer enc.Close()
+	raw := []byte("{\"type\":\"user/message\",\"data\":{\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}\n")
+	p = filepath.Join(t.TempDir(), "dsh")
+	putLog(t, p, enc.EncodeAll(raw, nil))
+	r = LogReader{path: p, kind: "dsh"}
+	lines, err = r.Read()
+	if err != nil || len(lines) != 1 || r.seen != int64(len(raw)) {
+		t.Fatal(r.seen, len(lines), err)
+	}
+	putLog(t, p, append(enc.EncodeAll(raw, nil), enc.EncodeAll(raw, nil)...))
+	lines, err = r.Read()
+	if err != nil || len(lines) != 1 || r.seen != 2*int64(len(raw)) {
+		t.Fatal(r.seen, lines, err)
 	}
 }

@@ -71,6 +71,7 @@ type Model struct {
 	keys                           keyMap
 	generation                     uint64
 	inFlight                       bool
+	lastLogRead                    time.Time
 	reader                         *LogReader
 	logLines                       []LogLine
 	logErr, rosterErr, stateErr    string
@@ -190,6 +191,7 @@ func (m *Model) selectID(id string) {
 	m.selected = id
 	m.generation++
 	m.reader = nil
+	m.lastLogRead = time.Time{}
 	m.inFlight = false
 	m.logLines = nil
 	m.logErr = ""
@@ -286,6 +288,10 @@ func (m *Model) requestLog() tea.Cmd {
 	if !ok {
 		return nil
 	}
+	if m.reader != nil && m.reader.kind == "dsh" && !m.lastLogRead.IsZero() && m.now().Sub(m.lastLogRead) < 3*time.Second {
+		return nil
+	}
+	m.lastLogRead = m.now()
 	gen, r, read := m.generation, m.reader, m.readLog
 	m.inFlight = true
 	return func() tea.Msg { reader, lines, err := read(r, row); return logMsg{gen, reader, lines, err} }
