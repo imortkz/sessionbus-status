@@ -3,7 +3,6 @@ package main
 import (
 	"strings"
 	"time"
-	"unicode"
 )
 
 type Record struct {
@@ -15,22 +14,7 @@ type Record struct {
 }
 type Update struct{ Kind, Text string }
 
-func sanitize(text string) string {
-	text = strings.Map(func(r rune) rune {
-		if r == '\t' || r == '\n' || r == '\r' {
-			return ' '
-		}
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-			return -1
-		}
-		return r
-	}, text)
-	runes := []rune(strings.TrimSpace(text))
-	if len(runes) > 120 {
-		runes = runes[:120]
-	}
-	return string(runes)
-}
+func sanitize(text string) string { return cleanText(text, 120) }
 func ParseBody(body string) []Update {
 	var updates []Update
 	for _, line := range strings.Split(body, "\n") {
