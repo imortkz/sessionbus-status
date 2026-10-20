@@ -51,13 +51,9 @@ func BuildTree(report Report, state State, now time.Time, activity map[string]ti
 			continue
 		}
 		rows := map[string]Row{}
-		names := map[string]int{}
 		for _, row := range host.Sessions {
 			if row.Product != "bus-status" {
 				rows[row.SessionID] = row
-				if n := cleanText(row.Name, 120); n != "" {
-					names[n]++
-				}
 			}
 		}
 		children := map[string][]string{}
@@ -112,8 +108,6 @@ func BuildTree(report Report, state State, now time.Time, activity map[string]ti
 			display := cleanText(row.Name, 120)
 			if display == "" {
 				display = h + " · " + shortID(id)
-			} else if names[display] > 1 {
-				display += " · " + shortID(id)
 			}
 			line := cleanText(rec.Status, 120)
 			ask := cleanText(rec.Ask, 120) != ""
@@ -210,6 +204,7 @@ func BuildTree(report Report, state State, now time.Time, activity map[string]ti
 		}
 		trees = append(trees, tree)
 	}
+	applyDisplayNames(trees, false)
 	return trees
 }
 
@@ -243,4 +238,33 @@ func hiddenDuplicates(trees []HostTree) int {
 		}
 	}
 	return count
+}
+
+// Count duplicate names within each host after applying the chosen visibility.
+func applyDisplayNames(trees []HostTree, showAll bool) {
+	for _, h := range trees {
+		counts := map[string]int{}
+		var nodes []*Node
+		var collect func(*Node)
+		collect = func(n *Node) {
+			nodes = append(nodes, n)
+			if n.Name != "" && (showAll || !n.HiddenDuplicate) {
+				counts[n.Name]++
+			}
+			for _, c := range n.Children {
+				collect(c)
+			}
+		}
+		for _, n := range h.Nodes {
+			collect(n)
+		}
+		for _, n := range nodes {
+			n.Display = n.Name
+			if n.Name == "" {
+				n.Display = n.Harness + " · " + shortID(n.ID)
+			} else if (showAll || !n.HiddenDuplicate) && counts[n.Name] > 1 {
+				n.Display += " · " + shortID(n.ID)
+			}
+		}
+	}
 }

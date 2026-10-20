@@ -880,3 +880,31 @@ func TestIdleAgeColumn(t *testing.T) {
 		}
 	}
 }
+
+func TestVisibleDuplicateSuffixes(t *testing.T) {
+	m, _, _, now := testModel(t)
+	r := Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{{SessionID: "old-id", Name: "same", Kind: "peer"}, {SessionID: "new-id", Name: "same", Kind: "peer"}}}}
+	s := State{Sessions: map[string]Record{"old-id": {Status: "old-status", UpdatedAt: now.Add(-time.Hour)}, "new-id": {Status: "new-status", UpdatedAt: now}}}
+	m.Update(stateMsg{state: s})
+	m.Update(rosterMsg{report: r})
+	for _, got := range []string{stripANSI(m.View()), Render(r, s, now, false)} {
+		if strings.Contains(got, "same ·") || !strings.Contains(got, "same") || strings.Contains(got, "old-status") {
+			t.Fatal("hidden twin affects visible display", got)
+		}
+	}
+	n := BuildTree(r, s, now, nil)[0].Nodes[0]
+	if n.Display != "same" {
+		t.Fatal("default tree suffix", n.Display)
+	}
+	press(m, "f")
+	v := stripANSI(m.View())
+	for _, want := range []string{"same · old-id", "same · new-id"} {
+		if !strings.Contains(v, want) {
+			t.Fatal("visible duplicate lacks suffix", v)
+		}
+	}
+	press(m, "f")
+	if strings.Contains(stripANSI(m.View()), "same ·") {
+		t.Fatal("suffix retained", m.View())
+	}
+}

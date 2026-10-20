@@ -216,6 +216,9 @@ func (m *Model) selectID(id string) {
 }
 func (m *Model) rebuild() {
 	m.tree = BuildTree(m.report, m.state, m.now(), m.activity)
+	if m.showAll {
+		applyDisplayNames(m.tree, true)
+	}
 	rows := m.visible()
 	for _, v := range rows {
 		if v.node.ID == m.selected {
