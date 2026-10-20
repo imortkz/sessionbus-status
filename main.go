@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -94,11 +95,17 @@ func runWatch(args []string) int {
 		fmt.Fprintln(os.Stderr, "bus-status:", err)
 		return 1
 	}
-	model := newModel(tuiConfig{ctx: ctx, cancel: cancel, statePath: *path, home: home, groups: *groups, sound: *sound, command: command, interval: *interval, timeout: *timeout, muted: *muted})
-	if _, err := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx)).Run(); err != nil && ctx.Err() == nil {
-		fmt.Fprintln(os.Stderr, "bus-status:", err)
+	wg := &sync.WaitGroup{}
+	model := newModel(tuiConfig{collectorWG: wg, ctx: ctx, cancel: cancel, statePath: *path, home: home, groups: *groups, sound: *sound, command: command, interval: *interval, timeout: *timeout, muted: *muted})
+	_, runErr := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
+	wasCanceled := ctx.Err() != nil
+	cancel()
+	waitCollector(wg, 2*time.Second)
+	if runErr != nil && !wasCanceled {
+		fmt.Fprintln(os.Stderr, "bus-status:", runErr)
 		return 1
 	}
+
 	return 0
 }
 
@@ -124,4 +131,17 @@ func runRoster(ctx context.Context, command []string, timeout time.Duration) ([]
 		return nil, nil, fmt.Errorf("roster command: %w", tickCtx.Err())
 	}
 	return stdout.Bytes(), stderr.Bytes(), err
+}
+
+func waitCollector(wg *sync.WaitGroup, timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		return false
+	}
 }

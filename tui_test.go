@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -439,4 +440,25 @@ func TestCollectorFailureRetry(t *testing.T) {
 	if m.collectorMode != "внешний" || m.collectorErr != "" {
 		t.Fatal(m.collectorMode, m.collectorErr)
 	}
+}
+
+func TestCollectorShutdownWait(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wg := &sync.WaitGroup{}
+	m := newModel(tuiConfig{ctx: ctx, cancel: cancel, collectorWG: wg})
+	started, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	m.startCollector = func(ctx context.Context, _, _ string) error { close(started); <-ctx.Done(); <-release; return nil }
+	cmd := m.collectorDecision()
+	go func() { cmd(); close(finished) }()
+	<-started
+	press(m, "q")
+	if waitCollector(wg, 10*time.Millisecond) {
+		t.Fatal("quit did not wait for collector")
+	}
+	close(release)
+	if !waitCollector(wg, time.Second) {
+		t.Fatal("collector did not finish")
+	}
+	<-finished
 }

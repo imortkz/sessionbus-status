@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -14,6 +15,7 @@ import (
 )
 
 type tuiConfig struct {
+	collectorWG                    *sync.WaitGroup
 	ctx                            context.Context
 	cancel                         context.CancelFunc
 	statePath, home, groups, sound string
@@ -297,7 +299,15 @@ func (m *Model) collectorDecision() tea.Cmd {
 	m.collectorMode = "свой"
 	m.ownCollector = true
 	start, c := m.startCollector, m.config
-	return func() tea.Msg { return collectorMsg{start(c.ctx, c.statePath, c.groups)} }
+	if c.collectorWG != nil {
+		c.collectorWG.Add(1)
+	}
+	return func() tea.Msg {
+		if c.collectorWG != nil {
+			defer c.collectorWG.Done()
+		}
+		return collectorMsg{start(c.ctx, c.statePath, c.groups)}
+	}
 }
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
