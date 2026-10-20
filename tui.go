@@ -106,7 +106,7 @@ func newModel(c tuiConfig) *Model {
 	if c.timeout <= 0 {
 		c.timeout = 10 * time.Second
 	}
-	m := &Model{config: c, collapsed: map[string]bool{}, pane: "history", muted: c.muted, collectorMode: uiCollectorChecking, focus: "tree", followTail: true, logRenderer: lipgloss.DefaultRenderer(), width: 100, height: 30, viewport: viewport.New(98, 8), help: help.New(), now: time.Now, notifier: macNotifier{}, startCollector: startCollector}
+	m := &Model{config: c, collapsed: map[string]bool{}, pane: "history", muted: c.muted, collectorMode: uiCollectorChecking, focus: "tree", followTail: true, logRenderer: lipgloss.DefaultRenderer(), width: 100, height: 30, viewport: viewport.New(98, 8), help: help.New(), now: time.Now, notifier: newMacNotifier(), startCollector: startCollector}
 	m.keys = keyMap{
 		key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", uiHelpSelect)),
 		key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←→", uiHelpCollapse)),

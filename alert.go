@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"os"
 	"os/exec"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -70,12 +74,47 @@ type Notifier interface {
 	Notify(title, body string)
 }
 type commandStarter func(*exec.Cmd)
-type macNotifier struct{ start commandStarter }
 
+// macNotifier prefers terminal-notifier (click activates the terminal and,
+// in iTerm2, selects this TUI's session) and falls back to osascript.
+type macNotifier struct {
+	start        commandStarter
+	run          func(*exec.Cmd) (string, error)
+	notifierPath string
+	bundle       string
+	itermSession string
+}
+
+var (
+	bundleRE       = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
+	itermSessionRE = regexp.MustCompile(`^[0-9A-Fa-f-]{36}$`)
+)
+
+// newMacNotifier resolves terminal-notifier and the click target once.
+func newMacNotifier() macNotifier {
+	n := macNotifier{}
+	n.notifierPath, _ = exec.LookPath("terminal-notifier")
+	if b := os.Getenv("__CFBundleIdentifier"); bundleRE.MatchString(b) {
+		n.bundle = b
+	}
+	if os.Getenv("TERM_PROGRAM") == "iTerm.app" {
+		if _, guid, ok := strings.Cut(os.Getenv("ITERM_SESSION_ID"), ":"); ok && itermSessionRE.MatchString(guid) {
+			n.itermSession = guid
+		}
+	}
+	return n
+}
 func startCommand(cmd *exec.Cmd) {
 	if cmd.Start() == nil {
 		go func() { _ = cmd.Wait() }()
 	}
+}
+func runCapture(cmd *exec.Cmd) (string, error) {
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := cmd.Run()
+	return out.String(), err
 }
 func (n macNotifier) starter() commandStarter {
 	if n.start != nil {
@@ -92,6 +131,57 @@ func (n macNotifier) launch(name string, args ...string) {
 	n.starter()(cmd)
 }
 func (n macNotifier) Sound(path string) { n.launch("afplay", path) }
-func (n macNotifier) Notify(title, body string) {
+
+// selectITermCommand runs under /bin/sh from terminal-notifier -execute; only
+// the validated GUID is interpolated.
+func selectITermCommand(guid string) string {
+	script := `tell application "iTerm2"
+repeat with w in windows
+repeat with t in tabs of w
+repeat with s in sessions of t
+if unique id of s is "` + guid + `" then
+select w
+select t
+select s
+end if
+end repeat
+end repeat
+end repeat
+activate
+end tell`
+	return "/usr/bin/osascript -e '" + script + "'"
+}
+func (n macNotifier) terminalNotifierArgs(title, body string) []string {
+	args := []string{"-title", title, "-message", body, "-group", uiAppName}
+	if n.bundle != "" {
+		args = append(args, "-activate", n.bundle)
+	}
+	if n.itermSession != "" {
+		args = append(args, "-execute", selectITermCommand(n.itermSession))
+	}
+	return args
+}
+
+// terminalNotify reports whether terminal-notifier showed the notification.
+func (n macNotifier) terminalNotify(title, body string) bool {
+	run := n.run
+	if run == nil {
+		run = runCapture
+	}
+	out, err := run(exec.Command(n.notifierPath, n.terminalNotifierArgs(title, body)...))
+	return err == nil && !strings.Contains(out, "not allowed") && !strings.Contains(out, "Could not request notification permission")
+}
+func (n macNotifier) osascript(title, body string) {
 	n.launch("osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", title, body)
+}
+func (n macNotifier) Notify(title, body string) {
+	if n.notifierPath == "" {
+		n.osascript(title, body)
+		return
+	}
+	go func() {
+		if !n.terminalNotify(title, body) {
+			n.osascript(title, body)
+		}
+	}()
 }

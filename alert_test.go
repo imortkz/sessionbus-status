@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os/exec"
 	"reflect"
 	"strings"
@@ -96,5 +97,87 @@ func TestNotifierStreams(t *testing.T) {
 	n.Notify("sessionbus-status", "question")
 	if len(commands) != 2 || commands[0].Args[0] != "afplay" || commands[1].Args[0] != "osascript" {
 		t.Fatal(commands)
+	}
+}
+
+const testGUID = "0A1B2C3D-4E5F-6789-ABCD-EF0123456789"
+
+func TestNotifierTerminalNotifierArgs(t *testing.T) {
+	body := `quote " $(x) ' & do shell script "bad"`
+	plain := macNotifier{notifierPath: "/bin/tn"}
+	want := []string{"-title", "sessionbus-status", "-message", body, "-group", "sessionbus-status"}
+	if got := plain.terminalNotifierArgs("sessionbus-status", body); !reflect.DeepEqual(got, want) {
+		t.Fatalf("%q", got)
+	}
+	full := macNotifier{notifierPath: "/bin/tn", bundle: "com.googlecode.iterm2", itermSession: testGUID}
+	got := full.terminalNotifierArgs("sessionbus-status", body)
+	if len(got) != 10 || got[6] != "-activate" || got[7] != "com.googlecode.iterm2" || got[8] != "-execute" {
+		t.Fatalf("%q", got)
+	}
+	if !strings.Contains(got[9], testGUID) || !strings.HasPrefix(got[9], "/usr/bin/osascript") || strings.Contains(got[9], "quote") || strings.Contains(got[9], "sessionbus-status") {
+		t.Fatalf("execute command %q", got[9])
+	}
+}
+
+func TestNotifierEnvValidation(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	t.Setenv("__CFBundleIdentifier", "com.googlecode.iterm2; rm -rf /")
+	t.Setenv("ITERM_SESSION_ID", "w0t0p0:"+testGUID+"\"; bad")
+	if n := newMacNotifier(); n.bundle != "" || n.itermSession != "" || n.notifierPath != "" {
+		t.Fatalf("%+v", n)
+	}
+	t.Setenv("__CFBundleIdentifier", "com.googlecode.iterm2")
+	t.Setenv("ITERM_SESSION_ID", "w0t0p0:"+testGUID)
+	if n := newMacNotifier(); n.bundle != "com.googlecode.iterm2" || n.itermSession != testGUID {
+		t.Fatalf("%+v", n)
+	}
+	t.Setenv("TERM_PROGRAM", "Apple_Terminal")
+	if n := newMacNotifier(); n.itermSession != "" {
+		t.Fatalf("%+v", n)
+	}
+}
+
+func TestNotifierFallbackToOsascript(t *testing.T) {
+	cases := map[string]struct {
+		out string
+		err error
+	}{
+		"nonzero":    {err: errors.New("exit 1")},
+		"permission": {out: "Could not request notification permission: Notifications are not allowed for this application"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			started := make(chan []string, 2)
+			n := macNotifier{notifierPath: "/bin/tn",
+				run:   func(cmd *exec.Cmd) (string, error) { return c.out, c.err },
+				start: func(cmd *exec.Cmd) { started <- cmd.Args }}
+			n.Notify("title", "body")
+			select {
+			case args := <-started:
+				if args[0] != "osascript" || args[len(args)-1] != "body" {
+					t.Fatalf("%q", args)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("no osascript fallback")
+			}
+		})
+	}
+}
+
+func TestNotifierSuccessSkipsOsascript(t *testing.T) {
+	ran := make(chan []string, 1)
+	started := make(chan []string, 1)
+	n := macNotifier{notifierPath: "/bin/tn",
+		run:   func(cmd *exec.Cmd) (string, error) { ran <- cmd.Args; return "", nil },
+		start: func(cmd *exec.Cmd) { started <- cmd.Args }}
+	n.Notify("title", "body")
+	if args := <-ran; args[0] != "/bin/tn" {
+		t.Fatalf("%q", args)
+	}
+	select {
+	case args := <-started:
+		t.Fatalf("unexpected fallback %q", args)
+	case <-time.After(100 * time.Millisecond):
 	}
 }
