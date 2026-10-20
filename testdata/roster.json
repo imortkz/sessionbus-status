@@ -3,50 +3,50 @@
   "federation": "fixture",
   "complete": true,
   "local": {
-    "host": "macbook",
+    "host": "laptop",
     "products": [
       "claude-peer",
       "codex-peer"
     ],
     "sessions": [
       {
-        "session_id": "master@macbook",
-        "name": "openclaw-peer@macbook",
+        "session_id": "master@laptop",
+        "name": "demo-peer@laptop",
         "kind": "peer",
         "product": "claude-peer",
         "connected": true,
         "running": false
       },
       {
-        "session_id": "researcher@macbook",
-        "name": "researcher-bus-status@macbook",
+        "session_id": "researcher@laptop",
+        "name": "researcher-bus-status@laptop",
         "kind": "lane",
         "product": "claude-peer",
-        "owner": "master@macbook",
+        "owner": "master@laptop",
         "connected": true,
         "running": false
       },
       {
-        "session_id": "developer@macbook",
-        "name": "developer-bus-status@macbook",
+        "session_id": "developer@laptop",
+        "name": "developer-bus-status@laptop",
         "kind": "lane",
         "product": "codex-peer",
-        "owner": "master@macbook",
+        "owner": "master@laptop",
         "connected": true,
         "running": true
       },
       {
-        "session_id": "orphan@macbook",
-        "name": "orphan@macbook",
+        "session_id": "orphan@laptop",
+        "name": "orphan@laptop",
         "kind": "lane",
         "product": "sessionbus-dsh",
-        "owner": "absent@macbook",
+        "owner": "absent@laptop",
         "connected": true,
         "running": true
       },
       {
-        "session_id": "bus-status@macbook",
-        "name": "bus-status@macbook",
+        "session_id": "bus-status@laptop",
+        "name": "bus-status@laptop",
         "kind": "peer",
         "product": "bus-status",
         "connected": true,
@@ -56,7 +56,7 @@
   },
   "remote": [
     {
-      "host": "office",
+      "host": "server",
       "error": "offline",
       "sessions": []
     }

@@ -56,15 +56,15 @@ func press(m *Model, key string) tea.Cmd {
 }
 func TestKeysAndLayout(t *testing.T) {
 	m, r, _, _ := testModel(t)
-	if m.selected != "master@macbook" {
+	if m.selected != "master@laptop" {
 		t.Fatal(m.selected)
 	}
 	press(m, "down")
-	if m.selected != "developer@macbook" {
+	if m.selected != "developer@laptop" {
 		t.Fatal(m.selected)
 	}
 	m.Update(rosterMsg{report: r})
-	if m.selected != "developer@macbook" {
+	if m.selected != "developer@laptop" {
 		t.Fatal("selection reset")
 	}
 	press(m, "up")
@@ -128,8 +128,8 @@ func TestKeysAndLayout(t *testing.T) {
 }
 func TestVisibleOutput(t *testing.T) {
 	m, r, s, now := testModel(t)
-	s.Sessions["developer@macbook"] = Record{Status: "working", History: []Entry{{At: now, Kind: "status", Text: "history\x1b\u202e\u200b"}}}
-	s.Sessions["researcher@macbook"] = Record{Status: "old", UpdatedAt: now.Add(-11 * time.Minute)}
+	s.Sessions["developer@laptop"] = Record{Status: "working", History: []Entry{{At: now, Kind: "status", Text: "history\x1b\u202e\u200b"}}}
+	s.Sessions["researcher@laptop"] = Record{Status: "old", UpdatedAt: now.Add(-11 * time.Minute)}
 	m.Update(stateMsg{state: s})
 	press(m, "down")
 	v := stripANSI(m.View())
@@ -156,7 +156,7 @@ func TestVisibleOutput(t *testing.T) {
 	m.Update(rosterMsg{report: r})
 	press(m, "f")
 	v = stripANSI(m.View())
-	if !strings.Contains(v, "empty-peer") || !strings.Contains(v, "openclaw-peer") || !strings.Contains(v, uiShowAll) {
+	if !strings.Contains(v, "empty-peer") || !strings.Contains(v, "demo-peer") || !strings.Contains(v, uiShowAll) {
 		t.Fatal(v)
 	}
 	// Idle rows retain normal color (U-17).
@@ -347,10 +347,10 @@ func TestLocalLogCommand(t *testing.T) {
 
 func TestPeerActivityRefresh(t *testing.T) {
 	m, r, s, now := testModel(t)
-	s.Sessions["master@macbook"] = Record{Status: "old", UpdatedAt: now.Add(-time.Hour)}
+	s.Sessions["master@laptop"] = Record{Status: "old", UpdatedAt: now.Add(-time.Hour)}
 	m.Update(stateMsg{state: s})
 	v := stripANSI(m.View())
-	if !strings.Contains(v, "◐ ▾ openclaw-peer") || !strings.Contains(v, uiLanesLegend) {
+	if !strings.Contains(v, "◐ ▾ demo-peer") || !strings.Contains(v, uiLanesLegend) {
 		t.Fatal(v)
 	}
 	// Stat work is deferred until the command runs, then refreshes activity without opening the log pane.
@@ -364,11 +364,11 @@ func TestPeerActivityRefresh(t *testing.T) {
 	}
 	msg := cmd().(stateMsg)
 	msg.state = s
-	if !msg.activity["master@macbook"].Equal(now) {
+	if !msg.activity["master@laptop"].Equal(now) {
 		t.Fatal(msg.activity)
 	}
 	m.Update(msg)
-	if !strings.Contains(stripANSI(m.View()), "● ▾ openclaw-peer") {
+	if !strings.Contains(stripANSI(m.View()), "● ▾ demo-peer") {
 		t.Fatal(m.View())
 	}
 	// Missing/old logs fall back to running lanes; no real homes are inspected.
@@ -378,14 +378,14 @@ func TestPeerActivityRefresh(t *testing.T) {
 	msg = m.pollState()().(stateMsg)
 	msg.state = s
 	m.Update(msg)
-	if !strings.Contains(stripANSI(m.View()), "◐ ▾ openclaw-peer") {
+	if !strings.Contains(stripANSI(m.View()), "◐ ▾ demo-peer") {
 		t.Fatal(m.View())
 	}
 	for i := range r.Local.Sessions {
 		r.Local.Sessions[i].Running = false
 	}
 	m.Update(rosterMsg{report: r})
-	if !strings.Contains(stripANSI(m.View()), "○ ▾ openclaw-peer") {
+	if !strings.Contains(stripANSI(m.View()), "○ ▾ demo-peer") {
 		t.Fatal(m.View())
 	}
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
@@ -500,13 +500,13 @@ func TestAlertRosterFlap(t *testing.T) {
 	if len(n.sounds) != 1 {
 		t.Fatal("reminder lost", n)
 	}
-	rec := s.Sessions["master@macbook"]
+	rec := s.Sessions["master@laptop"]
 	rec.Ask = ""
-	s.Sessions["master@macbook"] = rec
+	s.Sessions["master@laptop"] = rec
 	_, cmd := m.Update(stateMsg{state: s})
 	runActions(cmd)
 	rec.Ask = "new question"
-	s.Sessions["master@macbook"] = rec
+	s.Sessions["master@laptop"] = rec
 	_, cmd = m.Update(stateMsg{state: s})
 	runActions(cmd)
 	if len(n.sounds) != 2 {
@@ -1005,8 +1005,8 @@ func TestRosterEligibleAlertsAndCount(t *testing.T) {
 	m.muted = false
 	m.alerts = Alerts{}
 	m.alerts.Tick(now, nil)
-	m.report = Report{Complete: false, Local: Host{Host: "local", Sessions: []Row{{SessionID: "active@local", Name: "active", Kind: "peer"}}}, Remote: []Host{{Host: "office", Error: "offline"}}}
-	m.state = State{Sessions: map[string]Record{"active@local": {Ask: "active question"}, "closed@local": {Ask: "ghost question"}, "remote@office": {Ask: "remote question"}}}
+	m.report = Report{Complete: false, Local: Host{Host: "local", Sessions: []Row{{SessionID: "active@local", Name: "active", Kind: "peer"}}}, Remote: []Host{{Host: "server", Error: "offline"}}}
+	m.state = State{Sessions: map[string]Record{"active@local": {Ask: "active question"}, "closed@local": {Ask: "ghost question"}, "remote@server": {Ask: "remote question"}}}
 	m.rebuild()
 	runActions(m.alertCmd())
 	if len(n.bodies) != 2 || len(askIDs(m.report, m.state)) != 2 {
@@ -1137,9 +1137,9 @@ func TestLogFocusHelpIncludesPaneToggle(t *testing.T) {
 func TestCollectorErrorHeaderKeepsAlerts(t *testing.T) {
 	for _, width := range []int{60, 100} {
 		m, _, s, _ := testModel(t)
-		rec := s.Sessions["developer@macbook"]
+		rec := s.Sessions["developer@laptop"]
 		rec.Ask = "second question"
-		s.Sessions["developer@macbook"] = rec
+		s.Sessions["developer@laptop"] = rec
 		m.Update(stateMsg{state: s})
 		m.Update(collectorMsg{err: fmt.Errorf("%s", strings.Repeat("x", 300))})
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 20})
@@ -1167,7 +1167,7 @@ func TestSessionHostSuffixIsExact(t *testing.T) {
 		{SessionID: "path", Name: "team@local/notes", Kind: "peer"},
 		{SessionID: "owner", Name: "team@dept@local", Kind: "peer"},
 		{SessionID: "child", Name: "team@dept/review@local", Owner: "owner", Kind: "lane"},
-	}}, Remote: []Host{{Host: "office", Sessions: []Row{{SessionID: "remote", Name: "bob@local", Kind: "peer"}}}}}
+	}}, Remote: []Host{{Host: "server", Sessions: []Row{{SessionID: "remote", Name: "bob@local", Kind: "peer"}}}}}
 	m.Update(rosterMsg{report: r})
 	for _, got := range []string{stripANSI(m.View()), Render(r, State{}, now, false)} {
 		for _, want := range []string{"○ alice@example", "team@local/notes", "▾ team@dept", "└ review", "bob@local"} {
@@ -1192,11 +1192,11 @@ func TestNotificationNamesMatchSessionColumn(t *testing.T) {
 		{SessionID: "parent", Name: "parent@department@local", Kind: "peer"},
 		{SessionID: "child", Name: "parent@department/review@local", Owner: "parent", Kind: "lane"},
 		{SessionID: "mail", Name: "ops@example@local", Kind: "peer"},
-	}}, Remote: []Host{{Host: "office", Sessions: []Row{{SessionID: "remote-a", Name: "remote@office", Kind: "peer"}, {SessionID: "remote-b", Name: "remote@office", Kind: "peer"}}}}}
+	}}, Remote: []Host{{Host: "server", Sessions: []Row{{SessionID: "remote-a", Name: "remote@server", Kind: "peer"}, {SessionID: "remote-b", Name: "remote@server", Kind: "peer"}}}}}
 	m.state = State{Sessions: map[string]Record{"child": {Ask: "проверить"}, "mail": {Ask: "mail question"}, "remote-a": {Ask: "first"}, "remote-b": {Ask: "second"}}}
 	m.rebuild()
 	runActions(m.alertCmd())
-	for _, want := range []string{"review asks: проверить", "ops@example asks: mail question", "remote · remote-a (on office) asks: first", "remote · remote-b (on office) asks: second"} {
+	for _, want := range []string{"review asks: проверить", "ops@example asks: mail question", "remote · remote-a (on server) asks: first", "remote · remote-b (on server) asks: second"} {
 		found := false
 		for _, body := range n.bodies {
 			if body == uiAppName+": "+want {

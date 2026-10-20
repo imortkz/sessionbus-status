@@ -22,7 +22,7 @@ func TestBellPreservesAsksAcrossFailedTick(t *testing.T) {
 	if bell {
 		t.Fatal("unchanged ask rang again after failed tick")
 	}
-	state.Sessions["developer@macbook"] = Record{Ask: "second question"}
+	state.Sessions["developer@laptop"] = Record{Ask: "second question"}
 	bell, _ = nextBell(prev, report, nil, state)
 	if !bell {
 		t.Fatal("new ask did not ring")

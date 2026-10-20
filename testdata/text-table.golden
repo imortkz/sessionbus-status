@@ -1,8 +1,8 @@
-sessionbus-status · 14:32:05 · macbook    ⚠ 1 waiting for you
+sessionbus-status · 14:32:05 · laptop    ⚠ 1 waiting for you
 
   SESSION                   STATUS                                   AGE      MODEL          HARNESS
-⚠ ▾ openclaw-peer           WAITING: одобрить PLAN bus-status        3m       opus-5-5       claude
+⚠ ▾ demo-peer               WAITING: одобрить PLAN bus-status        3m       opus-5-5       claude
 ●   ├ developer-bus-status  волна 1: пишу сборщик                    45s      gpt-6.1-sol    codex
 ○   └ researcher-bus-status no status                                idle     sonnet-5-5     claude
 ● orphan                    no status                                                        dsh
-── office: unavailable (offline) ───────────────────────────────────────────────────────────────────
+── server: unavailable (offline) ───────────────────────────────────────────────────────────────────

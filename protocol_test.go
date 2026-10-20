@@ -40,7 +40,7 @@ func TestSanitizeDropsUnicodeFormatCharacters(t *testing.T) {
 		t.Fatalf("write sanitizer: %q", rec.Status)
 	}
 	report, state, now := fixture(t)
-	state.Sessions["developer@macbook"] = Record{Status: text}
+	state.Sessions["developer@laptop"] = Record{Status: text}
 	if got := Render(report, state, now, false); !strings.Contains(got, "abcdefgh") || strings.ContainsAny(got, "\u202E\u200B\u2066\u2069") {
 		t.Fatalf("render sanitizer: %q", got)
 	}

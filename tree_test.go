@@ -20,10 +20,10 @@ func fixture(t *testing.T) (Report, State, time.Time) {
 	}
 	now := time.Date(2026, 10, 20, 14, 32, 5, 0, time.UTC)
 	state := State{Version: 1, Sessions: map[string]Record{
-		"master@macbook":     {Model: "claude-opus-5-5", Ask: "одобрить PLAN bus-status", UpdatedAt: now.Add(-3 * time.Minute)},
-		"developer@macbook":  {Model: "gpt-6.1-sol", Status: "волна 1: пишу сборщик", UpdatedAt: now.Add(-45 * time.Second)},
-		"researcher@macbook": {Model: "claude-sonnet-5-5"},
-		"bus-status@macbook": {Product: "bus-status", Ask: "collector must stay hidden"},
+		"master@laptop":     {Model: "claude-opus-5-5", Ask: "одобрить PLAN bus-status", UpdatedAt: now.Add(-3 * time.Minute)},
+		"developer@laptop":  {Model: "gpt-6.1-sol", Status: "волна 1: пишу сборщик", UpdatedAt: now.Add(-45 * time.Second)},
+		"researcher@laptop": {Model: "claude-sonnet-5-5"},
+		"bus-status@laptop": {Product: "bus-status", Ask: "collector must stay hidden"},
 	}}
 	return report, state, now
 }
@@ -51,21 +51,21 @@ func TestRenderOrphansHostsAndErrors(t *testing.T) {
 	report.Error = "partial"
 	report.Remote = append(report.Remote, Host{Host: "remote", Sessions: []Row{{SessionID: "remote-a", Product: "codex-peer"}}})
 	got := Render(report, state, now, false)
-	for _, want := range []string{"\n● orphan", "── office" + uiUnavailable + "offline)", "── remote", "○ codex · remote-a", uiIncomplete, "partial"} {
+	for _, want := range []string{"\n● orphan", "── server" + uiUnavailable + "offline)", "── remote", "○ codex · remote-a", uiIncomplete, "partial"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in %s", want, got)
 		}
 	}
 	data, _ := os.ReadFile("testdata/roster.json")
-	if got := Frame(data, []byte("command failed"), errors.New("exit 1"), state, now, false); !strings.Contains(got, "openclaw-peer") || strings.Contains(got, "command failed") {
+	if got := Frame(data, []byte("command failed"), errors.New("exit 1"), state, now, false); !strings.Contains(got, "demo-peer") || strings.Contains(got, "command failed") {
 		t.Fatal(got)
 	}
 	// A waiting grandchild lifts its entire branch above a running root.
-	report.Local.Sessions = append(report.Local.Sessions, Row{SessionID: "grandchild", Owner: "researcher@macbook", Product: "codex-peer"})
-	state.Sessions["master@macbook"] = Record{}
+	report.Local.Sessions = append(report.Local.Sessions, Row{SessionID: "grandchild", Owner: "researcher@laptop", Product: "codex-peer"})
+	state.Sessions["master@laptop"] = Record{}
 	state.Sessions["grandchild"] = Record{Ask: "question"}
 	got = Render(report, state, now, false)
-	if strings.Index(got, "openclaw-peer") > strings.Index(got, "orphan") || strings.Index(got, "researcher-bus") > strings.Index(got, "developer-bus") || !strings.Contains(got, "codex · grandchi") {
+	if strings.Index(got, "demo-peer") > strings.Index(got, "orphan") || strings.Index(got, "researcher-bus") > strings.Index(got, "developer-bus") || !strings.Contains(got, "codex · grandchi") {
 		t.Fatal(got)
 	}
 }
@@ -85,7 +85,7 @@ func TestRenderSanitizesInputs(t *testing.T) {
 	report.Remote[0].Host += poison
 	report.Remote[0].Error += poison
 	report.Error = poison
-	state.Sessions["master@macbook"] = Record{Ask: poison, Model: poison, Status: poison}
+	state.Sessions["master@laptop"] = Record{Ask: poison, Model: poison, Status: poison}
 	for _, got := range []string{Render(report, state, now, false), Frame([]byte("invalid"), []byte(poison), errors.New("bad"), state, now, false), Frame(nil, nil, errors.New(poison), state, now, false)} {
 		for _, r := range got {
 			if r != '\n' && (r < 32 || r == 127 || r >= 128 && r <= 159) {
@@ -102,7 +102,7 @@ func TestRenderSanitizesInputs(t *testing.T) {
 
 func TestRenderStatusOnlySanitization(t *testing.T) {
 	report, state, now := fixture(t)
-	state.Sessions["developer@macbook"] = Record{Status: "working\x1b[31m\a\x00\u009b"}
+	state.Sessions["developer@laptop"] = Record{Status: "working\x1b[31m\a\x00\u009b"}
 	got := Render(report, state, now, false)
 	if !strings.Contains(got, "working[31m") {
 		t.Fatalf("missing status: %q", got)
@@ -148,14 +148,24 @@ func TestRenderOmitsRemoteCollector(t *testing.T) {
 
 func TestRenderPeerActivity(t *testing.T) {
 	r, s, now := fixture(t)
-	s.Sessions["master@macbook"] = Record{Status: "old", UpdatedAt: now.Add(-time.Hour)}
+	s.Sessions["master@laptop"] = Record{Status: "old", UpdatedAt: now.Add(-time.Hour)}
 	got := Render(r, s, now, false)
-	if !strings.Contains(got, "◐ ▾ openclaw-peer") || !strings.Contains(got, "●   ├ developer-bus") {
+	if !strings.Contains(got, "◐ ▾ demo-peer") || !strings.Contains(got, "●   ├ developer-bus") {
 		t.Fatal(got)
 	}
 	r.Local.Sessions[2].Running = false
 	got = Render(r, s, now, false)
-	if !strings.Contains(got, "○ ▾ openclaw-peer") {
+	if !strings.Contains(got, "○ ▾ demo-peer") {
 		t.Fatal(got)
+	}
+}
+
+func TestNeutralFixtureNames(t *testing.T) {
+	report, _, _ := fixture(t)
+	if report.Local.Host != "laptop" || len(report.Remote) != 1 || report.Remote[0].Host != "server" {
+		t.Fatalf("fixture hosts: %+v", report)
+	}
+	if report.Local.Sessions[0].Name != "demo-peer@laptop" {
+		t.Fatalf("fixture name: %q", report.Local.Sessions[0].Name)
 	}
 }
