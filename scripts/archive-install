@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+set -eu
+src=$(CDPATH='' cd "$(dirname "$0")" && pwd -P)
+root="$HOME/.local/libexec/sessionbus/sessionbus-status"
+[ ! -L "$root" ] || { echo 'Indirect package root; review before replacing.' >&2; exit 1; }
+mkdir -p "$root" "$HOME/.local/bin"
+install -m 755 "$src/sessionbus-status" "$root/sessionbus-status.new"
+mv -f "$root/sessionbus-status.new" "$root/sessionbus-status"
+ln -sfn "$root/sessionbus-status" "$HOME/.local/bin/sessionbus-status"
+printf 'Installed %s.\n' "$HOME/.local/bin/sessionbus-status"
+ # Keep the suggested profile variables literal.
+# shellcheck disable=SC2016
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) printf 'Add to your login profile: export PATH="$HOME/.local/bin:$PATH"\n';; esac
+printf 'Start sessionbus-status; senders must join the bus-status group.\n'
+printf 'Optional macOS click-to-tab: brew install terminal-notifier; allow it in System Settings > Notifications.\n'
