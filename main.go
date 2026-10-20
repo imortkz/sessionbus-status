@@ -86,11 +86,11 @@ func runWatch(args []string) int {
 			return 0
 		}
 		fmt.Fprint(os.Stdout, "\x1b[H\x1b[2J", frame)
-		cur := askIDs(report, state)
-		if newAsks(prev, cur) {
+		bell, next := nextBell(prev, report, decodeErr, state)
+		if bell {
 			fmt.Fprint(os.Stdout, "\a")
 		}
-		prev = cur
+		prev = next
 		timer := time.NewTimer(*interval)
 		select {
 		case <-ctx.Done():
@@ -99,4 +99,13 @@ func runWatch(args []string) int {
 		case <-timer.C:
 		}
 	}
+}
+
+// Failed roster ticks provide no evidence that an existing ask disappeared.
+func nextBell(prev map[string]bool, report Report, decodeErr error, state State) (bool, map[string]bool) {
+	if decodeErr != nil {
+		return false, prev
+	}
+	cur := askIDs(report, state)
+	return newAsks(prev, cur), cur
 }
