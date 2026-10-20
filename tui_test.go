@@ -856,7 +856,7 @@ func TestOwnerHostPrefixShortening(t *testing.T) {
 	}}}
 	m.Update(rosterMsg{report: r})
 	for _, got := range []string{stripANSI(m.View()), Render(r, State{}, now, false)} {
-		for _, want := range []string{"└ ▾ review@local", "└ nested"} {
+		for _, want := range []string{"└ ▾ review", "└ nested"} {
 			if !strings.Contains(got, want) {
 				t.Fatal("owner prefix retained", want, got)
 			}
@@ -1091,5 +1091,30 @@ func TestResizeBottomResumesTail(t *testing.T) {
 	m.Update(logMsg{gen: m.generation, lines: []LogLine{{Kind: "TEXT", Text: "new tail"}}})
 	if !m.viewport.AtBottom() || m.newLogLines != 0 {
 		t.Fatal("tail did not follow after resize")
+	}
+}
+
+func TestSessionNamesOmitHost(t *testing.T) {
+	m, _, _, now := testModel(t)
+	r := Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{
+		{SessionID: "p", Name: "project@local", Kind: "peer"},
+		{SessionID: "a", Name: "project/review@local", Kind: "lane", Owner: "p"},
+		{SessionID: "b", Name: "project/review@local", Kind: "lane", Owner: "p"},
+	}}}
+	m.Update(rosterMsg{report: r})
+	for _, got := range []string{stripANSI(m.View()), Render(r, State{}, now, false)} {
+		for _, line := range strings.Split(got, "\n") {
+			if strings.Contains(line, uiHistory) {
+				continue
+			} // Pane titles are outside the SESSION column.
+			if strings.Contains(line, "@local") {
+				t.Fatal("host leaked into SESSION", line)
+			}
+		}
+		for _, want := range []string{"▾ project", "review · a", "review · b"} {
+			if !strings.Contains(got, want) {
+				t.Fatal("name/suffix changed", want, got)
+			}
+		}
 	}
 }
