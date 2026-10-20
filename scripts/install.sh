@@ -23,7 +23,7 @@ trap 'exit 1' HUP INT TERM
 # Highest semver tag among non-draft releases, prereleases included.
 # Reads the releases JSON on stdin; prints one tag.
 latest_tag() {
-  awk '
+  tr '{}[]' ',,,,' | tr ',' '\n' | awk '
     /"tag_name"[[:space:]]*:/ { t=$0; sub(/.*"tag_name"[[:space:]]*:[[:space:]]*"/, "", t); sub(/".*/, "", t); tag=t }
     /"draft"[[:space:]]*:[[:space:]]*true/ { draft[tag]=1 }
     { if (tag != "") seen[tag]=1 }

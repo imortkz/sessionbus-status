@@ -101,4 +101,14 @@ PATH="$fakebin:$PATH" HOME="$work/neg" FAKE_RELEASES="$work/releases.json" FAKE_
 grep -qx "v0.1.0-alpha.10/$asset" "$work/fetched" || fail "latest picked wrong tag: $(cat "$work/fetched")"
 [ -L "$work/neg/.local/bin/sessionbus-status" ] || fail 'latest: symlink missing'
 
+# latest from compact (single-line) JSON: draft skipped, semver max picked
+printf '%s' '[{"tag_name":"v0.1.0-alpha.3","draft":true,"prerelease":true},{"tag_name":"v0.1.0-alpha.2","draft":false,"prerelease":true},{"tag_name":"v0.1.0-alpha.1","draft":false,"prerelease":true}]' > "$work/compact.json"
+mkdir -p "$assets/v0.1.0-alpha.2"
+cp "$good/$asset" "$good/SHA256SUMS" "$assets/v0.1.0-alpha.2/"
+: > "$work/fetched"
+rm -rf "$work/neg"; mkdir "$work/neg"
+PATH="$fakebin:$PATH" HOME="$work/neg" FAKE_RELEASES="$work/compact.json" FAKE_ASSETS="$assets" FAKE_LOG="$work/fetched" \
+  sh "$repo/scripts/install.sh" >/dev/null || fail 'latest install (compact JSON)'
+grep -qx "v0.1.0-alpha.2/$asset" "$work/fetched" || fail "compact latest picked wrong tag: $(cat "$work/fetched")"
+
 echo 'install_test: ok'
