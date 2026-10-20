@@ -5,7 +5,14 @@ import (
 	"time"
 )
 
+type Entry struct {
+	At   time.Time `json:"at"`
+	Kind string    `json:"kind"`
+	Text string    `json:"text"`
+}
+
 type Record struct {
+	History   []Entry   `json:"history,omitempty"`
 	Product   string    `json:"product"`
 	Model     string    `json:"model"`
 	Status    string    `json:"status"`
@@ -49,6 +56,10 @@ func Apply(rec Record, updates []Update, now time.Time) Record {
 			rec.Model = text
 		default:
 			continue
+		}
+		rec.History = append(append([]Entry(nil), rec.History...), Entry{At: now, Kind: u.Kind, Text: text})
+		if len(rec.History) > 20 {
+			rec.History = rec.History[len(rec.History)-20:]
 		}
 		rec.UpdatedAt = now
 	}

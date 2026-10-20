@@ -31,6 +31,7 @@ func saveState(path string, state State) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
+	state.Version = 2
 	data, err := json.Marshal(state)
 	if err != nil {
 		return err

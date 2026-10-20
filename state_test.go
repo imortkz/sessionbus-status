@@ -16,7 +16,7 @@ func TestStateRoundTrip(t *testing.T) {
 	if err != nil || empty.Version != 1 || len(empty.Sessions) != 0 {
 		t.Fatalf("missing: %+v %v", empty, err)
 	}
-	want := State{Version: 1, Sessions: map[string]Record{"a": {Product: "codex-peer", Status: "working", UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}}
+	want := State{Version: 2, Sessions: map[string]Record{"a": {Product: "codex-peer", Status: "working", UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}}
 	if err := saveState(path, want); err != nil {
 		t.Fatal(err)
 	}
@@ -96,5 +96,30 @@ func TestStateSyncBeforeRename(t *testing.T) {
 				t.Fatalf("commit: %q %v", got, err)
 			}
 		})
+	}
+}
+
+func TestHistoryCapAndV1Compat(t *testing.T) {
+	now := time.Now().UTC()
+	rec := Record{}
+	for i := 0; i < 25; i++ {
+		rec = Apply(rec, []Update{{"status", fmt.Sprint(i)}}, now.Add(time.Duration(i)*time.Second))
+	}
+	if len(rec.History) != 20 || rec.History[0].Text != "5" || rec.History[19].Text != "24" || rec.History[0].Kind != "status" {
+		t.Fatalf("history: %+v", rec.History)
+	}
+	p := filepath.Join(t.TempDir(), "state.json")
+	os.WriteFile(p, []byte(`{"version":1,"sessions":{"old":{"status":"old"}}}`), 0600)
+	s, err := loadState(p)
+	if err != nil || len(s.Sessions["old"].History) != 0 {
+		t.Fatal(s, err)
+	}
+	s.Sessions["new"] = rec
+	if err = saveState(p, s); err != nil {
+		t.Fatal(err)
+	}
+	s, err = loadState(p)
+	if err != nil || s.Version != 2 || len(s.Sessions["new"].History) != 20 {
+		t.Fatal(s, err)
 	}
 }

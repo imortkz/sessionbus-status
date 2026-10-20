@@ -31,6 +31,7 @@ func (c *collector) deliver(_ context.Context, _ sdk.PeerIdentity, req sdk.Deliv
 		rec := Apply(c.state.Sessions[req.From.SessionID], updates, time.Now().UTC())
 		rec.Product = sanitize(req.From.Product)
 		c.state.Sessions[req.From.SessionID] = rec
+		c.state.Version = 2
 		if err := saveState(c.path, c.state); err != nil {
 			fmt.Fprintln(os.Stderr, "bus-status: save:", err)
 		}
