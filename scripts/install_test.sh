@@ -111,4 +111,11 @@ PATH="$fakebin:$PATH" HOME="$work/neg" FAKE_RELEASES="$work/compact.json" FAKE_A
   sh "$repo/scripts/install.sh" >/dev/null || fail 'latest install (compact JSON)'
 grep -qx "v0.1.0-alpha.2/$asset" "$work/fetched" || fail "compact latest picked wrong tag: $(cat "$work/fetched")"
 
+# pin without leading v is normalised to the tag
+: > "$work/fetched"
+rm -rf "$work/neg"; mkdir "$work/neg"
+PATH="$fakebin:$PATH" HOME="$work/neg" SESSIONBUS_STATUS_VERSION=0.1.0-alpha.2 FAKE_ASSETS="$assets" FAKE_LOG="$work/fetched" \
+  sh "$repo/scripts/install.sh" >/dev/null || fail 'pin without v'
+grep -qx "v0.1.0-alpha.2/$asset" "$work/fetched" || fail "pin without v fetched: $(cat "$work/fetched")"
+
 echo 'install_test: ok'

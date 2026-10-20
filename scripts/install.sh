@@ -60,7 +60,7 @@ else
     tag=$(latest_tag < "$tmp/releases")
     [ -n "$tag" ] || { echo "No release found for $repo" >&2; exit 1; }
   else
-    tag=$version
+    tag=v${version#v}
   fi
   base="https://github.com/$repo/releases/download/$tag"
 fi
