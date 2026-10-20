@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -54,7 +55,7 @@ func TestAlertSchedule(t *testing.T) {
 }
 func TestNotifierArgs(t *testing.T) {
 	var calls [][]string
-	n := macNotifier{start: func(name string, args ...string) { calls = append(calls, append([]string{name}, args...)) }}
+	n := macNotifier{start: func(cmd *exec.Cmd) { calls = append(calls, append([]string(nil), cmd.Args...)) }}
 	body := `quote " & do shell script "bad"`
 	n.Sound("sound with spaces.aiff")
 	n.Notify("bus-status", body)
@@ -80,5 +81,20 @@ func TestAlertStartupSilent(t *testing.T) {
 	asks = append(asks, AskInfo{ID: "new", Display: "new", Text: "question"})
 	if got := a.Tick(now.Add(61*time.Second), asks); len(got) != 2 || got[1].Body != "new asks: question" {
 		t.Fatal(got)
+	}
+}
+
+func TestNotifierStreams(t *testing.T) {
+	var commands []*exec.Cmd
+	n := macNotifier{start: func(cmd *exec.Cmd) {
+		commands = append(commands, cmd)
+		if cmd.Stdout != nil || cmd.Stderr != nil || cmd.Stdin != nil {
+			t.Fatal("notifier inherits terminal streams", cmd)
+		}
+	}}
+	n.Sound("fake.aiff")
+	n.Notify("bus-status", "question")
+	if len(commands) != 2 || commands[0].Args[0] != "afplay" || commands[1].Args[0] != "osascript" {
+		t.Fatal(commands)
 	}
 }

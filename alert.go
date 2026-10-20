@@ -69,11 +69,10 @@ type Notifier interface {
 	Sound(path string)
 	Notify(title, body string)
 }
-type commandStarter func(name string, args ...string)
+type commandStarter func(*exec.Cmd)
 type macNotifier struct{ start commandStarter }
 
-func startCommand(name string, args ...string) {
-	cmd := exec.Command(name, args...)
+func startCommand(cmd *exec.Cmd) {
 	if cmd.Start() == nil {
 		go func() { _ = cmd.Wait() }()
 	}
@@ -84,7 +83,15 @@ func (n macNotifier) starter() commandStarter {
 	}
 	return startCommand
 }
-func (n macNotifier) Sound(path string) { n.starter()("afplay", path) }
+func (n macNotifier) launch(name string, args ...string) {
+	cmd := exec.Command(name, args...)
+	// nil streams connect to the null device, never the live TUI terminal.
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	n.starter()(cmd)
+}
+func (n macNotifier) Sound(path string) { n.launch("afplay", path) }
 func (n macNotifier) Notify(title, body string) {
-	n.starter()("osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", title, body)
+	n.launch("osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", title, body)
 }
