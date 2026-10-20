@@ -11,7 +11,7 @@ GOCACHE=$PWD/.gocache GOPROXY=off go build -o bin/bus-status .
 Run the collector in one terminal, including your project groups:
 
 ```sh
-bin/bus-status serve -g bus-status,openclaw-peer
+bin/bus-status serve -g bus-status
 ```
 
 Run the viewer in another:
@@ -39,7 +39,7 @@ For example, call the Sessionbus tool:
 
 Only master sends `ask:` for questions to the owner. Lanes waiting for master send `status:` instead.
 
-Sessionbus visibility requires a shared group. The collector's `-g` list must include a group shared with every sender: lanes get `bus-status` through `extra_groups`, while interactive peers share their project group (for example `openclaw-peer`).
+Sessionbus visibility requires a shared group. Everyone joins the `bus-status` group: the collector via `-g bus-status`, lanes via `extra_groups`, interactive peers via a launch flag (`claude-peer -g <project> -g bus-status`). Status messages are addressed to the collector (`target`), not broadcast to the group, so the group gives no peer extra turns.
 
 Limits: status and model are self-reported only; there is no automatic detection. State is a macbook-local file, synced to disk and written atomically with mode 0600 in a directory created with mode 0700. Remote roster hosts appear in the tree, but their statuses require a collector reachable by those senders. The viewer reads the roster and state; keep the collector running to receive updates.
 
