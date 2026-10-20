@@ -249,16 +249,24 @@ func (m *Model) alertCmd() tea.Cmd {
 	}
 	var asks []AskInfo
 	displays := map[string]string{}
-	var walk func(*Node)
-	walk = func(n *Node) {
-		displays[n.ID] = n.Display
+	remoteHosts := map[string]bool{}
+	var walk func(*Node, string, HostTree)
+	walk = func(n *Node, parent string, h HostTree) {
+		display := sessionDisplayName(n, parent, h.Host)
+		if !h.Local {
+			display += fmt.Sprintf(uiOnHost, h.Host)
+		}
+		displays[n.ID] = display
 		for _, c := range n.Children {
-			walk(c)
+			walk(c, n.Name, h)
 		}
 	}
 	for _, h := range m.tree {
+		if !h.Local {
+			remoteHosts[h.Host] = true
+		}
 		for _, n := range h.Nodes {
-			walk(n)
+			walk(n, "", h)
 		}
 	}
 	for id := range askIDs(m.report, m.state) {
@@ -266,6 +274,10 @@ func (m *Model) alertCmd() tea.Cmd {
 		display := displays[id]
 		if display == "" {
 			display = cleanText(id, 120)
+			_, host, _ := strings.Cut(id, "@")
+			if remoteHosts[host] {
+				display += fmt.Sprintf(uiOnHost, cleanText(host, 120))
+			}
 		}
 		since := rec.UpdatedAt
 		for i := len(rec.History) - 1; i >= 0; i-- {

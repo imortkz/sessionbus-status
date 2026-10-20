@@ -2,6 +2,7 @@ package main
 
 // Generated UI text is English; agent-provided content is left unchanged.
 const (
+	uiOnHost              = " (on %s)"
 	uiCollectorErrorState = "error"
 	uiCollectorConnected  = "connected"
 	uiDiagnosticLogError  = "diagnostic log: "

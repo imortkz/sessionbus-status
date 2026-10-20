@@ -1177,3 +1177,34 @@ func TestSessionHostSuffixIsExact(t *testing.T) {
 		}
 	}
 }
+
+func TestNotificationNamesMatchSessionColumn(t *testing.T) {
+	m, _, _, now := testModel(t)
+	n := &fakeNotifier{}
+	m.notifier = n
+	m.muted = false
+	m.alerts = Alerts{}
+	m.alerts.Tick(now, nil)
+	m.report = Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{
+		{SessionID: "parent", Name: "parent@department@local", Kind: "peer"},
+		{SessionID: "child", Name: "parent@department/review@local", Owner: "parent", Kind: "lane"},
+		{SessionID: "mail", Name: "ops@example@local", Kind: "peer"},
+	}}, Remote: []Host{{Host: "office", Sessions: []Row{{SessionID: "remote-a", Name: "remote@office", Kind: "peer"}, {SessionID: "remote-b", Name: "remote@office", Kind: "peer"}}}}}
+	m.state = State{Sessions: map[string]Record{"child": {Ask: "проверить"}, "mail": {Ask: "mail question"}, "remote-a": {Ask: "first"}, "remote-b": {Ask: "second"}}}
+	m.rebuild()
+	runActions(m.alertCmd())
+	for _, want := range []string{"review asks: проверить", "ops@example asks: mail question", "remote · remote-a (on office) asks: first", "remote · remote-b (on office) asks: second"} {
+		found := false
+		for _, body := range n.bodies {
+			if body == uiAppName+": "+want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("notification display differs from tree", want, n.bodies)
+		}
+	}
+	if len(n.bodies) != 4 {
+		t.Fatal(n.bodies)
+	}
+}
