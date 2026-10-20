@@ -50,6 +50,7 @@ func runServe(args []string) int {
 		fmt.Fprintln(os.Stderr, uiAppName+": unexpected serve arguments")
 		return 2
 	}
+	migrateDefaultState(flags, *path, os.Stderr)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if err := startCollector(ctx, *path, *groups, os.Stderr); err != nil {

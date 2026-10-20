@@ -59,6 +59,7 @@ func runWatch(args []string) int {
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
+	migrateDefaultState(flags, *path, os.Stderr)
 	timeoutSet := false
 	flags.Visit(func(f *flag.Flag) {
 		if f.Name == "roster-timeout" {

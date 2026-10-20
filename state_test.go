@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -121,5 +124,83 @@ func TestHistoryCapAndV1Compat(t *testing.T) {
 	s, err = loadState(p)
 	if err != nil || s.Version != 2 || len(s.Sessions["new"].History) != 20 {
 		t.Fatal(s, err)
+	}
+}
+
+func legacyFixture(t *testing.T, content string) (root string) {
+	t.Helper()
+	root = t.TempDir()
+	t.Setenv("XDG_STATE_HOME", root)
+	if content != "" {
+		if err := os.MkdirAll(filepath.Join(root, "bus-status"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(legacyStatePath(), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+func TestLegacyStateMigrationCopies(t *testing.T) {
+	root := legacyFixture(t, `{"version":2}`)
+	if want := filepath.Join(root, "sessionbus-status", "state.json"); defaultStatePath() != want {
+		t.Fatalf("default path %q want %q", defaultStatePath(), want)
+	}
+	flags := flag.NewFlagSet("t", flag.ContinueOnError)
+	flags.String("state", defaultStatePath(), "")
+	var warn bytes.Buffer
+	migrateDefaultState(flags, defaultStatePath(), &warn)
+	data, err := os.ReadFile(defaultStatePath())
+	if err != nil || string(data) != `{"version":2}` || warn.Len() != 0 {
+		t.Fatalf("data=%q err=%v warn=%q", data, err, warn.String())
+	}
+	if info, _ := os.Stat(defaultStatePath()); info.Mode().Perm() != 0600 {
+		t.Fatalf("file mode %v", info.Mode().Perm())
+	}
+	if info, _ := os.Stat(filepath.Dir(defaultStatePath())); info.Mode().Perm() != 0700 {
+		t.Fatalf("dir mode %v", info.Mode().Perm())
+	}
+	if _, err := os.Stat(legacyStatePath()); err != nil {
+		t.Fatalf("legacy file must stay: %v", err)
+	}
+}
+
+func TestLegacyStateMigrationKeepsExistingNewFile(t *testing.T) {
+	legacyFixture(t, `{"old":1}`)
+	if err := os.MkdirAll(filepath.Dir(defaultStatePath()), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(defaultStatePath(), []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateLegacyState(defaultStatePath(), legacyStatePath()); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(defaultStatePath()); string(data) != "new" {
+		t.Fatalf("overwritten: %q", data)
+	}
+}
+
+func TestLegacyStateMigrationSkipsExplicitState(t *testing.T) {
+	legacyFixture(t, `{"old":1}`)
+	flags := flag.NewFlagSet("t", flag.ContinueOnError)
+	path := flags.String("state", defaultStatePath(), "")
+	if err := flags.Parse([]string{"-state", defaultStatePath()}); err != nil {
+		t.Fatal(err)
+	}
+	migrateDefaultState(flags, *path, io.Discard)
+	if _, err := os.Stat(defaultStatePath()); !os.IsNotExist(err) {
+		t.Fatalf("explicit -state was migrated: %v", err)
+	}
+}
+
+func TestLegacyStateMigrationMissingOldIsNoop(t *testing.T) {
+	legacyFixture(t, "")
+	if err := migrateLegacyState(defaultStatePath(), legacyStatePath()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Dir(defaultStatePath())); !os.IsNotExist(err) {
+		t.Fatalf("directory created: %v", err)
 	}
 }
