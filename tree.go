@@ -104,6 +104,9 @@ func Render(report Report, state State, now time.Time, color bool) string {
 	return out.String()
 }
 
+const treeAgeWidth = 8
+const treeFixedWidth = 1 + 5 + treeAgeWidth + 14 + 7
+
 type treeTable struct{ width, session, status int }
 
 func newTreeTable(width int, labels []string) treeTable {
@@ -111,8 +114,8 @@ func newTreeTable(width int, labels []string) treeTable {
 	for _, s := range labels {
 		session = max(session, lipgloss.Width(s))
 	}
-	session = min(32, session, max(len(uiSession), width-32))
-	return treeTable{width, session, max(1, width-session-31)}
+	session = min(32, session, max(len(uiSession), width-treeFixedWidth-1))
+	return treeTable{width, session, max(1, width-session-treeFixedWidth)}
 }
 func tableCell(s string, width int) string {
 	if lipgloss.Width(s) > width {
@@ -125,7 +128,7 @@ func tableCell(s string, width int) string {
 	return s + strings.Repeat(" ", max(0, width-lipgloss.Width(s)))
 }
 func (t treeTable) header() string {
-	return "  " + tableCell(uiSession, t.session) + " " + tableCell(uiStatus, t.status) + " " + tableCell(uiAge, 4) + " " + tableCell(uiModel, 14) + " " + tableCell(uiHarness, 7)
+	return "  " + tableCell(uiSession, t.session) + " " + tableCell(uiStatus, t.status) + " " + tableCell(uiAge, treeAgeWidth) + " " + tableCell(uiModel, 14) + " " + tableCell(uiHarness, 7)
 }
 func shortModel(n *Node) string {
 	model := n.Model
@@ -192,11 +195,11 @@ func sessionLabels(trees []HostTree, collapsed map[string]bool, showAll bool) ma
 	return labels
 }
 func (t treeTable) row(n *Node, label string) string {
-	status := n.Line
+	ageText := n.Age
 	if n.Lane && !n.Running {
-		status = uiIdle + ": " + status
+		ageText = strings.TrimSpace(uiIdle + " " + ageText)
 	}
-	return tableCell(n.Icon(), 1) + " " + tableCell(label, t.session) + " " + tableCell(status, t.status) + " " + tableCell(n.Age, 4) + " " + tableCell(shortModel(n), 14) + " " + tableCell(n.Harness, 7)
+	return tableCell(n.Icon(), 1) + " " + tableCell(label, t.session) + " " + tableCell(n.Line, t.status) + " " + tableCell(ageText, treeAgeWidth) + " " + tableCell(shortModel(n), 14) + " " + tableCell(n.Harness, 7)
 }
 func renderHost(out *strings.Builder, host HostTree, color bool, table treeTable, labels map[string]string) {
 	if !host.Local || host.Error != "" {

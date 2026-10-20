@@ -1,8 +1,8 @@
 bus-status · 14:32:05 · macbook    ⚠ 1 waiting for you
 
-  SESSION                          STATUS                                AGE  MODEL          HARNESS
-⚠ ▾ openclaw-peer@macbook          WAITING: одобрить PLAN bus-status     3m   opus-5-5       claude
-●   ├ developer-bus-status@macbook волна 1: пишу сборщик                 45s  gpt-6.1-sol    codex
-○   └ researcher-bus-status@macbo… idle: no status                            sonnet-5-5     claude
+  SESSION                          STATUS                            AGE      MODEL          HARNESS
+⚠ ▾ openclaw-peer@macbook          WAITING: одобрить PLAN bus-status 3m       opus-5-5       claude
+●   ├ developer-bus-status@macbook волна 1: пишу сборщик             45s      gpt-6.1-sol    codex
+○   └ researcher-bus-status@macbo… no status                         idle     sonnet-5-5     claude
 ● orphan@macbook                   no status                                                 dsh
 ── office: unavailable (offline) ───────────────────────────────────────────────────────────────────

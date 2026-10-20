@@ -860,3 +860,23 @@ func TestOwnerHostPrefixShortening(t *testing.T) {
 		}
 	}
 }
+
+func TestIdleAgeColumn(t *testing.T) {
+	for _, duration := range []time.Duration{59 * time.Minute, 23 * time.Hour} {
+		m, _, _, now := testModel(t)
+		r := Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{{SessionID: "lane", Name: "lane", Kind: "lane", Product: "codex-peer"}}}}
+		s := State{Sessions: map[string]Record{"lane": {Status: "status-value", UpdatedAt: now.Add(-duration)}}}
+		m.Update(stateMsg{state: s})
+		m.Update(rosterMsg{report: r})
+		for _, got := range []string{stripANSI(m.View()), Render(r, s, now, false)} {
+			if !strings.Contains(got, "idle "+age(duration)) || strings.Contains(got, "idle:") || !strings.Contains(got, "status-value") {
+				t.Fatal(got)
+			}
+		}
+		table := newTreeTable(100, []string{"lane"})
+		n := BuildTree(r, s, now, nil)[0].Nodes[0]
+		if got := table.row(n, "lane"); !strings.Contains(got, tableCell("status-value", table.status)+" "+tableCell("idle "+age(duration), 8)+" ") {
+			t.Fatal("idle is not in age column", got)
+		}
+	}
+}
