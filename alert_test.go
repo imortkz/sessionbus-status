@@ -261,3 +261,13 @@ func TestSelectITermCommandRejectsInvalid(t *testing.T) {
 		t.Fatal("valid GUID rejected")
 	}
 }
+
+func TestNotifierGroupCleansID(t *testing.T) {
+	n := macNotifier{notifierPath: "/bin/tn"}
+	a := n.terminalNotifierArgs(Notice{Title: "t", Body: "b", ID: "a\nb\x1b\u202e@h"})
+	for i, v := range a {
+		if v == "-group" && a[i+1] != "sessionbus-status:a b@h" {
+			t.Fatalf("%q", a[i+1])
+		}
+	}
+}

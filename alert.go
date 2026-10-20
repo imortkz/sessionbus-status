@@ -153,7 +153,7 @@ end tell`
 func (n macNotifier) terminalNotifierArgs(nt Notice) []string {
 	group := uiAppName
 	if nt.ID != "" {
-		group += ":" + nt.ID
+		group += ":" + cleanText(nt.ID, 120)
 	}
 	args := []string{"-title", nt.Title, "-message", nt.Body, "-group", group}
 	if cmd := selectITermCommand(nt.Tab); cmd != "" {
