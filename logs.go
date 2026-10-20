@@ -67,6 +67,7 @@ type LogReader struct {
 	offset     int64
 	seen       int64
 	size       int64
+	info       os.FileInfo
 }
 
 func (r *LogReader) Read() ([]LogLine, error) {
@@ -79,11 +80,12 @@ func (r *LogReader) Read() ([]LogLine, error) {
 	if err != nil {
 		return nil, err
 	}
-	if info.Size() < r.size {
+	if info.Size() < r.size || (r.info != nil && !os.SameFile(r.info, info)) {
 		r.offset = 0
 		r.seen = 0
 	}
 	r.size = info.Size()
+	r.info = info
 	var data []byte
 	if r.kind == "dsh" {
 		dec, err := zstd.NewReader(f)

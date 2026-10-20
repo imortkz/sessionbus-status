@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -118,6 +119,9 @@ func newModel(c tuiConfig) *Model {
 			r = &LogReader{path: p, kind: k}
 		}
 		lines, err := r.Read()
+		if os.IsNotExist(err) {
+			return nil, nil, err
+		}
 		return r, lines, err
 	}
 	return m

@@ -537,3 +537,26 @@ func TestDSHReadInterval(t *testing.T) {
 		t.Fatal("DSH read not scheduled")
 	}
 }
+func TestLogMovedToArchive(t *testing.T) {
+	home := t.TempDir()
+	m := newModel(tuiConfig{home: home})
+	p := filepath.Join(home, ".codex/sessions/2026/10/20/rollout-t-id.jsonl")
+	data, _ := os.ReadFile("testdata/logs/codex.jsonl")
+	putLog(t, p, data)
+	row := visibleNode{node: &Node{ID: "id@local", Harness: "codex"}, local: true}
+	r, _, err := m.readLog(nil, row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archived := filepath.Join(home, ".codex/archived_sessions/rollout-t-id.jsonl")
+	putLog(t, archived, data)
+	os.Remove(p)
+	r, _, err = m.readLog(r, row)
+	if !os.IsNotExist(err) || r != nil {
+		t.Fatal("reader retained", r, err)
+	}
+	r, lines, err := m.readLog(r, row)
+	if err != nil || len(lines) != 5 || r.path != archived {
+		t.Fatal(r, lines, err)
+	}
+}

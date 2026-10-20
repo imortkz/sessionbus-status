@@ -191,3 +191,19 @@ func TestParseTailAndDSHByteOffset(t *testing.T) {
 		t.Fatal(r.seen, lines, err)
 	}
 }
+func TestLogReplacement(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "log")
+	old := []byte("{\"type\":\"event_msg\",\"payload\":{\"type\":\"agent_message\",\"message\":\"old\"}}\n")
+	putLog(t, p, old)
+	r := LogReader{path: p, kind: "codex"}
+	r.Read()
+	replacement := bytes.ReplaceAll(old, []byte("old"), []byte("replacement"))
+	putLog(t, p+".new", replacement)
+	if err := os.Rename(p+".new", p); err != nil {
+		t.Fatal(err)
+	}
+	lines, err := r.Read()
+	if err != nil || len(lines) != 1 || lines[0].Text != "replacement" {
+		t.Fatal(lines, err)
+	}
+}
