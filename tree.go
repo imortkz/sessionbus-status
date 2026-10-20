@@ -45,16 +45,27 @@ func decodeReport(data []byte) (Report, error) {
 	}
 	return report, nil
 }
+
+// A pending ask must belong to a current row, or to a host whose roster failed.
+// This same set drives both notifications and header counts.
 func askIDs(report Report, state State) map[string]bool {
-	ids := make(map[string]bool)
+	present, collectors, failedHosts := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, host := range append([]Host{report.Local}, report.Remote...) {
 		if host.Error != "" {
-			continue
+			failedHosts[host.Host] = true
 		}
 		for _, row := range host.Sessions {
-			if row.Product != "bus-status" && sanitize(state.Sessions[row.SessionID].Ask) != "" {
-				ids[row.SessionID] = true
+			present[row.SessionID] = true
+			if row.Product == "bus-status" {
+				collectors[row.SessionID] = true
 			}
+		}
+	}
+	ids := map[string]bool{}
+	for id, rec := range state.Sessions {
+		_, host, _ := strings.Cut(id, "@")
+		if !collectors[id] && rec.Product != "bus-status" && sanitize(rec.Ask) != "" && (present[id] || failedHosts[host]) {
+			ids[id] = true
 		}
 	}
 	return ids

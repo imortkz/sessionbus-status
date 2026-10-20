@@ -486,6 +486,7 @@ func TestAlertRosterFlap(t *testing.T) {
 	now = now.Add(10 * time.Second)
 	m.now = func() time.Time { return now }
 	m.report.Local.Sessions = nil
+	m.report.Local.Error = "offline"
 	m.rebuild()
 	runActions(m.alertCmd())
 	m.report = r
@@ -992,4 +993,40 @@ func captureTerminal(t *testing.T, fn func()) (string, string) {
 	out, _ := io.ReadAll(outR)
 	stderr, _ := io.ReadAll(errR)
 	return string(out), string(stderr)
+}
+
+func TestRosterEligibleAlertsAndCount(t *testing.T) {
+	m, _, _, now := testModel(t)
+	n := &fakeNotifier{}
+	m.notifier = n
+	m.muted = false
+	m.alerts = Alerts{}
+	m.alerts.Tick(now, nil)
+	m.report = Report{Complete: false, Local: Host{Host: "local", Sessions: []Row{{SessionID: "active@local", Name: "active", Kind: "peer"}}}, Remote: []Host{{Host: "office", Error: "offline"}}}
+	m.state = State{Sessions: map[string]Record{"active@local": {Ask: "active question"}, "closed@local": {Ask: "ghost question"}, "remote@office": {Ask: "remote question"}}}
+	m.rebuild()
+	runActions(m.alertCmd())
+	if len(n.bodies) != 2 || len(askIDs(m.report, m.state)) != 2 {
+		t.Fatal("header/alerts disagree", n.bodies, askIDs(m.report, m.state))
+	}
+	for _, body := range n.bodies {
+		if strings.Contains(body, "ghost") {
+			t.Fatal("closed session alerted", body)
+		}
+	}
+	for _, view := range []string{stripANSI(m.View()), Render(m.report, m.state, now, false)} {
+		if !strings.Contains(view, fmt.Sprintf(uiWaitingCount, 2)) {
+			t.Fatal("wrong header count", view)
+		}
+	}
+	// A healthy roster that no longer lists any sessions must not ring for leftover asks.
+	m.report = Report{Local: Host{Host: "local"}}
+	m.rebuild()
+	runActions(m.alertCmd())
+	now = now.Add(time.Minute)
+	m.now = func() time.Time { return now }
+	runActions(m.alertCmd())
+	if len(n.bodies) != 2 || len(askIDs(m.report, m.state)) != 0 {
+		t.Fatal("ghost reminders", n.bodies)
+	}
 }

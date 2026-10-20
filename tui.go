@@ -249,7 +249,6 @@ func (m *Model) alertCmd() tea.Cmd {
 	}
 	var asks []AskInfo
 	displays := map[string]string{}
-	collectors := map[string]bool{}
 	var walk func(*Node)
 	walk = func(n *Node) {
 		displays[n.ID] = n.Display
@@ -262,17 +261,8 @@ func (m *Model) alertCmd() tea.Cmd {
 			walk(n)
 		}
 	}
-	for _, h := range append([]Host{m.report.Local}, m.report.Remote...) {
-		for _, r := range h.Sessions {
-			if r.Product == "bus-status" {
-				collectors[r.SessionID] = true
-			}
-		}
-	}
-	for id, rec := range m.state.Sessions {
-		if cleanText(rec.Ask, 120) == "" || rec.Product == "bus-status" || collectors[id] {
-			continue
-		}
+	for id := range askIDs(m.report, m.state) {
+		rec := m.state.Sessions[id]
 		display := displays[id]
 		if display == "" {
 			display = cleanText(id, 120)
