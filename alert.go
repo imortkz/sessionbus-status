@@ -75,20 +75,16 @@ type Notifier interface {
 }
 type commandStarter func(*exec.Cmd)
 
-// macNotifier prefers terminal-notifier (click activates the terminal and,
-// in iTerm2, selects this TUI's session) and falls back to osascript.
+// macNotifier prefers terminal-notifier (click activates the terminal) and
+// falls back to osascript.
 type macNotifier struct {
 	start        commandStarter
 	run          func(*exec.Cmd) (string, error)
 	notifierPath string
 	bundle       string
-	itermSession string
 }
 
-var (
-	bundleRE       = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
-	itermSessionRE = regexp.MustCompile(`^[0-9A-Fa-f-]{36}$`)
-)
+var bundleRE = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
 
 // newMacNotifier resolves terminal-notifier and the click target once.
 func newMacNotifier() macNotifier {
@@ -96,11 +92,6 @@ func newMacNotifier() macNotifier {
 	n.notifierPath, _ = exec.LookPath("terminal-notifier")
 	if b := os.Getenv("__CFBundleIdentifier"); bundleRE.MatchString(b) {
 		n.bundle = b
-	}
-	if os.Getenv("TERM_PROGRAM") == "iTerm.app" {
-		if _, guid, ok := strings.Cut(os.Getenv("ITERM_SESSION_ID"), ":"); ok && itermSessionRE.MatchString(guid) {
-			n.itermSession = guid
-		}
 	}
 	return n
 }
@@ -132,32 +123,10 @@ func (n macNotifier) launch(name string, args ...string) {
 }
 func (n macNotifier) Sound(path string) { n.launch("afplay", path) }
 
-// selectITermCommand runs under /bin/sh from terminal-notifier -execute; only
-// the validated GUID is interpolated.
-func selectITermCommand(guid string) string {
-	script := `tell application "iTerm2"
-repeat with w in windows
-repeat with t in tabs of w
-repeat with s in sessions of t
-if unique id of s is "` + guid + `" then
-select w
-select t
-select s
-end if
-end repeat
-end repeat
-end repeat
-activate
-end tell`
-	return "/usr/bin/osascript -e '" + script + "'"
-}
 func (n macNotifier) terminalNotifierArgs(title, body string) []string {
 	args := []string{"-title", title, "-message", body, "-group", uiAppName}
 	if n.bundle != "" {
 		args = append(args, "-activate", n.bundle)
-	}
-	if n.itermSession != "" {
-		args = append(args, "-execute", selectITermCommand(n.itermSession))
 	}
 	return args
 }

@@ -100,8 +100,6 @@ func TestNotifierStreams(t *testing.T) {
 	}
 }
 
-const testGUID = "0A1B2C3D-4E5F-6789-ABCD-EF0123456789"
-
 func TestNotifierTerminalNotifierArgs(t *testing.T) {
 	body := `quote " $(x) ' & do shell script "bad"`
 	plain := macNotifier{notifierPath: "/bin/tn"}
@@ -109,31 +107,20 @@ func TestNotifierTerminalNotifierArgs(t *testing.T) {
 	if got := plain.terminalNotifierArgs("sessionbus-status", body); !reflect.DeepEqual(got, want) {
 		t.Fatalf("%q", got)
 	}
-	full := macNotifier{notifierPath: "/bin/tn", bundle: "com.googlecode.iterm2", itermSession: testGUID}
-	got := full.terminalNotifierArgs("sessionbus-status", body)
-	if len(got) != 10 || got[6] != "-activate" || got[7] != "com.googlecode.iterm2" || got[8] != "-execute" {
+	full := macNotifier{notifierPath: "/bin/tn", bundle: "com.googlecode.iterm2"}
+	if got := full.terminalNotifierArgs("sessionbus-status", body); !reflect.DeepEqual(got, append(want, "-activate", "com.googlecode.iterm2")) {
 		t.Fatalf("%q", got)
-	}
-	if !strings.Contains(got[9], testGUID) || !strings.HasPrefix(got[9], "/usr/bin/osascript") || strings.Contains(got[9], "quote") || strings.Contains(got[9], "sessionbus-status") {
-		t.Fatalf("execute command %q", got[9])
 	}
 }
 
 func TestNotifierEnvValidation(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	t.Setenv("TERM_PROGRAM", "iTerm.app")
 	t.Setenv("__CFBundleIdentifier", "com.googlecode.iterm2; rm -rf /")
-	t.Setenv("ITERM_SESSION_ID", "w0t0p0:"+testGUID+"\"; bad")
-	if n := newMacNotifier(); n.bundle != "" || n.itermSession != "" || n.notifierPath != "" {
+	if n := newMacNotifier(); n.bundle != "" || n.notifierPath != "" {
 		t.Fatalf("%+v", n)
 	}
 	t.Setenv("__CFBundleIdentifier", "com.googlecode.iterm2")
-	t.Setenv("ITERM_SESSION_ID", "w0t0p0:"+testGUID)
-	if n := newMacNotifier(); n.bundle != "com.googlecode.iterm2" || n.itermSession != testGUID {
-		t.Fatalf("%+v", n)
-	}
-	t.Setenv("TERM_PROGRAM", "Apple_Terminal")
-	if n := newMacNotifier(); n.itermSession != "" {
+	if n := newMacNotifier(); n.bundle != "com.googlecode.iterm2" {
 		t.Fatalf("%+v", n)
 	}
 }

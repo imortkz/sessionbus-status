@@ -1,5 +1,11 @@
 # sessionbus-status
 
+[![ci](https://github.com/imortkz/sessionbus-status/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/imortkz/sessionbus-status/actions/workflows/ci.yml)
+[![security](https://github.com/imortkz/sessionbus-status/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/imortkz/sessionbus-status/actions/workflows/security.yml)
+[![release](https://github.com/imortkz/sessionbus-status/actions/workflows/release.yml/badge.svg)](https://github.com/imortkz/sessionbus-status/actions/workflows/release.yml)
+[![latest release](https://img.shields.io/github/v/release/imortkz/sessionbus-status?include_prereleases&sort=semver)](https://github.com/imortkz/sessionbus-status/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 An interactive terminal tree of [Sessionbus](https://github.com/antst/sessionbus) peers and their lanes. One tab shows each session's harness, self-reported model, current activity and age, with status history or a live native log below the tree. Questions waiting for the owner appear first with a red `⚠`, an audible macOS sound and a system notification.
 
 Status: alpha (`v0.1.0-alpha.1`). Interfaces may change.
@@ -21,7 +27,7 @@ sessionbus-status --version
 
 - Sessionbus 0.5.12 or newer with `sessionbus roster --json`.
 - Sound and notifications work on macOS only; this is a stated limitation of the repository. On Linux the TUI runs without them.
-- Optional, macOS: `brew install terminal-notifier`, then allow notifications for terminal-notifier in System Settings → Notifications. Clicking a notification then brings your terminal to the front; in iTerm2 it also selects the TUI's tab. Without terminal-notifier (or without that permission) the built-in osascript notification is used, and clicking it opens Script Editor.
+- Optional, macOS: `brew install terminal-notifier`, then allow notifications for terminal-notifier in System Settings → Notifications. Clicking a notification then brings the terminal running the TUI to the front. Without terminal-notifier (or without that permission) the built-in osascript notification is used, and clicking it opens Script Editor.
 
 ## Quick start
 
