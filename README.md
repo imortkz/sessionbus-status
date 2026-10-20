@@ -90,7 +90,7 @@ Message protocol: send one or more lines with the Sessionbus tool:
 
 For `tab:` send `$ITERM_SESSION_ID`, whole or just the GUID after the colon; an invalid value is ignored. `tab:` and `name:` are not shown in the status history.
 
-Prefixes are case-insensitive after trimming leading spaces. Unknown lines and empty values are ignored. Updates in a body apply in order; protocol text is cleaned and capped at 120 runes.
+Prefixes are case-insensitive after trimming leading spaces. Unknown lines and empty values are ignored. Updates in a body apply in order; protocol text is cleaned and capped at 120 runes (`name:` at 60).
 
 ```json
 {"action":"send","arguments":{"target":"bus-status@laptop","message":"model: gpt-6.1-sol\nstatus: implementing the collector"}}
