@@ -175,8 +175,8 @@ type fakeNotifier struct {
 	bodies []string
 }
 
-func (f *fakeNotifier) Sound(p string)            { f.sounds = append(f.sounds, p) }
-func (f *fakeNotifier) Notify(title, body string) { f.bodies = append(f.bodies, title+": "+body) }
+func (f *fakeNotifier) Sound(p string)  { f.sounds = append(f.sounds, p) }
+func (f *fakeNotifier) Notify(n Notice) { f.bodies = append(f.bodies, n.Title+": "+n.Body) }
 
 // Execute command trees as Tea does, without running timers or external I/O.
 func runActions(cmd tea.Cmd) {

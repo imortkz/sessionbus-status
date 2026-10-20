@@ -213,7 +213,6 @@ func TestHideOlderTwinKeepsActive(t *testing.T) {
 	}
 }
 
-
 func TestSelfNameDisplay(t *testing.T) {
 	report, state, now := fixture(t)
 	report.Remote = []Host{{Host: "srv", Sessions: []Row{

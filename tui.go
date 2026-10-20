@@ -300,7 +300,7 @@ func (m *Model) alertCmd() tea.Cmd {
 				break
 			}
 		}
-		asks = append(asks, AskInfo{id, display, rec.Ask, since})
+		asks = append(asks, AskInfo{ID: id, Display: display, Text: rec.Ask, Since: since})
 	}
 	m.alerts.muted = m.muted
 	actions := m.alerts.Tick(m.now(), asks)
@@ -314,7 +314,7 @@ func (m *Model) alertCmd() tea.Cmd {
 			case "sound":
 				n.Sound(sound)
 			case "notify":
-				n.Notify(a.Title, a.Body)
+				n.Notify(Notice{Title: a.Title, Body: a.Body, ID: a.ID, Tab: a.Tab})
 			}
 		}
 		return nil

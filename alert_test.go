@@ -60,7 +60,7 @@ func TestNotifierArgs(t *testing.T) {
 	n := macNotifier{start: func(cmd *exec.Cmd) { calls = append(calls, append([]string(nil), cmd.Args...)) }}
 	body := `quote " & do shell script "bad"`
 	n.Sound("sound with spaces.aiff")
-	n.Notify("sessionbus-status", body)
+	n.Notify(Notice{Title: "sessionbus-status", Body: body})
 	want := [][]string{{"afplay", "sound with spaces.aiff"}, {"osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", "sessionbus-status", body}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("%q", calls)
@@ -95,7 +95,7 @@ func TestNotifierStreams(t *testing.T) {
 		}
 	}}
 	n.Sound("fake.aiff")
-	n.Notify("sessionbus-status", "question")
+	n.Notify(Notice{Title: "sessionbus-status", Body: "question"})
 	if len(commands) != 2 || commands[0].Args[0] != "afplay" || commands[1].Args[0] != "osascript" {
 		t.Fatal(commands)
 	}
@@ -105,11 +105,11 @@ func TestNotifierTerminalNotifierArgs(t *testing.T) {
 	body := `quote " $(x) ' & do shell script "bad"`
 	plain := macNotifier{notifierPath: "/bin/tn"}
 	want := []string{"-title", "sessionbus-status", "-message", body, "-group", "sessionbus-status"}
-	if got := plain.terminalNotifierArgs("sessionbus-status", body); !reflect.DeepEqual(got, want) {
+	if got := plain.terminalNotifierArgs(Notice{Title: "sessionbus-status", Body: body}); !reflect.DeepEqual(got, want) {
 		t.Fatalf("%q", got)
 	}
 	full := macNotifier{notifierPath: "/bin/tn", bundle: "com.googlecode.iterm2"}
-	if got := full.terminalNotifierArgs("sessionbus-status", body); !reflect.DeepEqual(got, append(want, "-activate", "com.googlecode.iterm2")) {
+	if got := full.terminalNotifierArgs(Notice{Title: "sessionbus-status", Body: body}); !reflect.DeepEqual(got, append(want, "-activate", "com.googlecode.iterm2")) {
 		t.Fatalf("%q", got)
 	}
 }
@@ -140,7 +140,7 @@ func TestNotifierFallbackToOsascript(t *testing.T) {
 			n := macNotifier{notifierPath: "/bin/tn",
 				run:   func(cmd *exec.Cmd) (string, error) { return c.out, c.err },
 				start: func(cmd *exec.Cmd) { started <- cmd.Args }}
-			n.Notify("title", "body")
+			n.Notify(Notice{Title: "title", Body: "body"})
 			select {
 			case args := <-started:
 				if args[0] != "osascript" || args[len(args)-1] != "body" {
@@ -159,7 +159,7 @@ func TestNotifierSuccessSkipsOsascript(t *testing.T) {
 	n := macNotifier{notifierPath: "/bin/tn",
 		run:   func(cmd *exec.Cmd) (string, error) { ran <- cmd.Args; return "", nil },
 		start: func(cmd *exec.Cmd) { started <- cmd.Args }}
-	n.Notify("title", "body")
+	n.Notify(Notice{Title: "title", Body: "body"})
 	if args := <-ran; args[0] != "/bin/tn" {
 		t.Fatalf("%q", args)
 	}
@@ -179,7 +179,7 @@ func TestNotifierTimeoutFallsBack(t *testing.T) {
 	notifierTimeout = 100 * time.Millisecond
 	defer func() { notifierTimeout = saved }()
 	started := make(chan []string, 1)
-	(macNotifier{notifierPath: script, start: func(cmd *exec.Cmd) { started <- cmd.Args }}).Notify("sessionbus-status", "question")
+	(macNotifier{notifierPath: script, start: func(cmd *exec.Cmd) { started <- cmd.Args }}).Notify(Notice{Title: "sessionbus-status", Body: "question"})
 	select {
 	case args := <-started:
 		if args[0] != "osascript" {
@@ -187,5 +187,66 @@ func TestNotifierTimeoutFallsBack(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("hung terminal-notifier did not fall back to osascript")
+	}
+}
+
+const testGUID = "0EB11E86-12BA-4739-B792-1F3699034011"
+
+func TestNotifierTabExecute(t *testing.T) {
+	body := `quote " $(x) ' secret-body`
+	n := macNotifier{notifierPath: "/bin/tn", bundle: "com.googlecode.iterm2"}
+	got := n.terminalNotifierArgs(Notice{Title: "t", Body: body, ID: "s@h", Tab: testGUID})
+	var exec string
+	for i, a := range got {
+		if a == "-activate" {
+			t.Fatalf("-activate with tab: %q", got)
+		}
+		if a == "-execute" {
+			exec = got[i+1]
+		}
+	}
+	if !strings.HasPrefix(exec, "/usr/bin/osascript") || !strings.Contains(exec, testGUID) || strings.Contains(exec, "secret-body") {
+		t.Fatalf("execute: %q", exec)
+	}
+}
+
+func TestNotifierRejectsBadTab(t *testing.T) {
+	n := macNotifier{notifierPath: "/bin/tn", bundle: "b.c"}
+	for _, tab := range []string{testGUID + "'; touch /tmp/x; '", "w1t6p0:" + testGUID, "$(x)"} {
+		got := n.terminalNotifierArgs(Notice{Title: "t", Body: "b", Tab: tab})
+		for _, a := range got {
+			if a == "-execute" || strings.Contains(a, "touch") {
+				t.Fatalf("%q: %q", tab, got)
+			}
+		}
+		if got[len(got)-2] != "-activate" {
+			t.Fatalf("no activate fallback: %q", got)
+		}
+	}
+}
+
+func TestNotifierGroupPerSession(t *testing.T) {
+	n := macNotifier{notifierPath: "/bin/tn"}
+	group := func(id string) string {
+		a := n.terminalNotifierArgs(Notice{Title: "t", Body: "b", ID: id})
+		for i, v := range a {
+			if v == "-group" {
+				return a[i+1]
+			}
+		}
+		return ""
+	}
+	if a, b := group("a@h"), group("b@h"); a == b || a != "sessionbus-status:a@h" {
+		t.Fatalf("%q %q", a, b)
+	}
+}
+
+func TestAlertScheduleCarriesIDAndTab(t *testing.T) {
+	now := time.Now()
+	a := Alerts{}
+	a.Tick(now, nil)
+	got := a.Tick(now, []AskInfo{{ID: "a", Display: "a", Tab: testGUID, Since: now}, {ID: "b", Display: "b", Since: now}})
+	if len(got) != 4 || got[1].ID != "a" || got[1].Tab != testGUID || got[3].ID != "b" || got[3].Tab != "" {
+		t.Fatal(got)
 	}
 }
