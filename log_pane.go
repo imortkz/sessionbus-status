@@ -14,10 +14,14 @@ func (m *Model) renderLogs(width int) string {
 	if len(m.logLines) == 0 {
 		return uiLogWaiting
 	}
+	return m.renderLogRecords(m.logLines, width)
+}
+
+func (m *Model) renderLogRecords(records []LogLine, width int) string {
 	const indent = 19 // time (8), two spaces, kind (7), two spaces
 	textWidth := max(1, width-indent)
 	var rows []string
-	for _, line := range m.logLines {
+	for _, line := range records {
 		kind := cleanText(line.Kind, 20)
 		text := cleanLogText(line.Text, logLimit(kind))
 		tool := cleanText(line.Tool, 120)
@@ -90,5 +94,9 @@ func (m *Model) syncLogViewport() {
 		m.newLogLines = 0
 	} else {
 		m.viewport.SetYOffset(offset)
+		m.followTail = m.viewport.AtBottom()
+		if m.followTail {
+			m.newLogLines = 0
+		}
 	}
 }

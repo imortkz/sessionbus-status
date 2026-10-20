@@ -1042,3 +1042,54 @@ func TestFullLogTabDoesNotHideTreeFocus(t *testing.T) {
 		t.Fatal("tree focus without tree", m.View())
 	}
 }
+
+func TestLogCapKeepsWrappedScrollAnchor(t *testing.T) {
+	m, _, _, _ := testModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	press(m, "l")
+	press(m, "tab")
+	lines := make([]LogLine, 200)
+	for i := range lines {
+		lines[i] = LogLine{Kind: "TEXT", Text: fmt.Sprintf("record %03d", i)}
+	}
+	lines[0].Text = strings.Repeat("界", 60)
+	m.Update(logMsg{gen: m.generation, lines: lines})
+	press(m, "g")
+	for i := 0; i < 10; i++ {
+		press(m, "down")
+	}
+	anchor := strings.Split(stripANSI(m.viewport.View()), "\n")[0]
+	m.Update(logMsg{gen: m.generation, lines: []LogLine{{Kind: "TEXT", Text: "new one"}, {Kind: "TEXT", Text: "new two"}}})
+	if got := strings.Split(stripANSI(m.viewport.View()), "\n")[0]; got != anchor {
+		t.Fatalf("anchor moved: %q → %q", anchor, got)
+	}
+	if m.newLogLines != 2 || m.followTail {
+		t.Fatal(m.newLogLines, m.followTail)
+	}
+}
+
+func TestResizeBottomResumesTail(t *testing.T) {
+	m, _, _, _ := testModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	press(m, "L")
+	lines := make([]LogLine, 40)
+	for i := range lines {
+		lines[i] = LogLine{Kind: "TEXT", Text: fmt.Sprint(i)}
+	}
+	m.Update(logMsg{gen: m.generation, lines: lines})
+	press(m, "g")
+	for i := 0; i < 20; i++ {
+		press(m, "down")
+	}
+	if m.followTail {
+		t.Fatal("test must start scrolled up")
+	}
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 35})
+	if !m.viewport.AtBottom() || !m.followTail {
+		t.Fatal("resize pinned bottom without following", m.viewport.YOffset, m.viewport.Height)
+	}
+	m.Update(logMsg{gen: m.generation, lines: []LogLine{{Kind: "TEXT", Text: "new tail"}}})
+	if !m.viewport.AtBottom() || m.newLogLines != 0 {
+		t.Fatal("tail did not follow after resize")
+	}
+}

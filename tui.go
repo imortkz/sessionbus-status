@@ -442,7 +442,12 @@ func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 			}
 			m.logLines = append(m.logLines, msg.lines...)
 			if len(m.logLines) > 200 {
-				m.logLines = m.logLines[len(m.logLines)-200:]
+				drop := len(m.logLines) - 200
+				if !m.followTail {
+					height := strings.Count(m.renderLogRecords(m.logLines[:drop], m.viewport.Width), "\n") + 1
+					m.viewport.SetYOffset(max(0, m.viewport.YOffset-height))
+				}
+				m.logLines = m.logLines[drop:]
 			}
 		}
 	case tea.KeyMsg:
