@@ -82,14 +82,21 @@ func header(now time.Time, host string, count int, incomplete bool) string {
 }
 func Render(report Report, state State, now time.Time, color bool) string {
 	var out strings.Builder
-	out.WriteString(header(now, report.Local.Host, len(askIDs(report, state)), !report.Complete))
+	trees := BuildTree(report, state, now, nil)
+	heading := header(now, report.Local.Host, len(askIDs(report, state)), !report.Complete)
+	if count := hiddenDuplicates(trees); count > 0 {
+		heading = strings.TrimSuffix(heading, "\n\n") + fmt.Sprintf(" · скрыто %d\n\n", count)
+	}
+	out.WriteString(heading)
 	if report.Error != "" {
 		out.WriteString("Ошибка: " + sanitize(report.Error) + "\n")
 	}
-	trees := BuildTree(report, state, now, nil)
 	var labels []string
 	var measure func(*Node, string, int)
 	measure = func(n *Node, parent string, depth int) {
+		if n.HiddenDuplicate {
+			return
+		}
 		labels = append(labels, sessionText(n, parent, depth, false))
 		for _, c := range n.Children {
 			measure(c, n.Name, depth+1)
@@ -172,6 +179,9 @@ func renderHost(out *strings.Builder, host HostTree, color bool, table treeTable
 	}
 	var draw func(*Node, string, int)
 	draw = func(n *Node, parent string, depth int) {
+		if n.HiddenDuplicate {
+			return
+		}
 		line := table.row(n, sessionText(n, parent, depth, false))
 		if color {
 			if n.Ask {

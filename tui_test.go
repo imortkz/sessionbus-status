@@ -143,12 +143,12 @@ func TestVisibleOutput(t *testing.T) {
 	if len(m.logLines) != 0 || strings.Contains(stripANSI(m.View()), "TEXT  log") {
 		t.Fatal("log retained on selection change")
 	}
-	// Empty leaf disappears; parent with lanes remains.
+	// Unique empty peers remain visible; f reveals hidden duplicates.
 	r.Local.Sessions = append(r.Local.Sessions, Row{SessionID: "empty", Name: "empty-peer", Product: "codex-peer"})
 	m.Update(rosterMsg{report: r})
 	press(m, "f")
 	v = stripANSI(m.View())
-	if strings.Contains(v, "empty-peer") || !strings.Contains(v, "openclaw-peer") || !strings.Contains(v, "фильтр") {
+	if !strings.Contains(v, "empty-peer") || !strings.Contains(v, "openclaw-peer") || !strings.Contains(v, "все") {
 		t.Fatal(v)
 	}
 	// Stale rendering has a real ANSI faint sequence, independently of color profile.
@@ -307,7 +307,7 @@ func TestNarrowHeader(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	press(m, "f")
 	header := strings.Split(stripANSI(m.View()), "\n")[1]
-	for _, want := range []string{"bus-status", "сборщик: внешний", "🔇", "фильтр", "⚠ 1"} {
+	for _, want := range []string{"bus-status", "сборщик: внешний", "🔇", "все", "⚠ 1"} {
 		if !strings.Contains(header, want) {
 			t.Fatalf("missing %q: %s", want, header)
 		}
@@ -631,5 +631,26 @@ func TestTableViewGolden(t *testing.T) {
 				t.Fatalf("golden mismatch:\n%s", got)
 			}
 		})
+	}
+}
+
+func TestDuplicatePeerToggle(t *testing.T) {
+	m, _, _, now := testModel(t)
+	r := Report{Local: Host{Host: "local", Sessions: []Row{{SessionID: "old", Name: "same", Kind: "peer"}, {SessionID: "new", Name: "same", Kind: "peer"}, {SessionID: "empty", Name: "empty", Kind: "peer"}}}}
+	s := State{Sessions: map[string]Record{"old": {Status: "old status", UpdatedAt: now.Add(-time.Hour)}, "new": {Status: "current", UpdatedAt: now}}}
+	m.Update(stateMsg{state: s})
+	m.Update(rosterMsg{report: r})
+	v := stripANSI(m.View())
+	if !strings.Contains(v, "скрыто 1") || strings.Contains(v, "same · old") || !strings.Contains(v, "empty") {
+		t.Fatal(v)
+	}
+	press(m, "f")
+	v = stripANSI(m.View())
+	if !strings.Contains(v, "same · old") || strings.Contains(v, "скрыто 1") {
+		t.Fatal(v)
+	}
+	press(m, "f")
+	if strings.Contains(stripANSI(m.View()), "same · old") {
+		t.Fatal(m.View())
 	}
 }

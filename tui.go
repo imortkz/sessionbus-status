@@ -60,7 +60,7 @@ type Model struct {
 	selected                       string
 	collapsed                      map[string]bool
 	pane                           string
-	filter, muted                  bool
+	showAll, muted                 bool
 	collectorMode                  string
 	collectorErr                   string
 	collectorRetryAt               time.Time
@@ -102,7 +102,7 @@ func newModel(c tuiConfig) *Model {
 		key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←→", "свернуть")),
 		key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "лог/история")),
 		key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "лог во весь экран")),
-		key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "фильтр")),
+		key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "все/скрыть")),
 		key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "звук вкл/выкл")),
 		key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "выход")),
 	}
@@ -175,7 +175,7 @@ func (m *Model) visible() []visibleNode {
 	var rows []visibleNode
 	var walk func(*Node, HostTree, int)
 	walk = func(n *Node, h HostTree, depth int) {
-		if m.filter && n.Line == noStatus && len(n.Children) == 0 {
+		if !m.showAll && n.HiddenDuplicate {
 			return
 		}
 		rows = append(rows, visibleNode{n, h.Host, h.Local, depth})
@@ -456,7 +456,7 @@ func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		case "esc":
 			m.pane = "history"
 		case "f":
-			m.filter = !m.filter
+			m.showAll = !m.showAll
 			m.rebuild()
 		case "s":
 			m.muted = !m.muted
@@ -547,8 +547,11 @@ func (m *Model) View() string {
 		collector = "\x1b[31m" + collector + "\x1b[0m"
 	}
 	badges := ""
-	if m.filter {
-		badges += " · фильтр"
+	if m.showAll {
+		badges += " · все"
+	}
+	if hidden := hiddenDuplicates(m.tree); hidden > 0 && !m.showAll {
+		badges += fmt.Sprintf(" · скрыто %d", hidden)
 	}
 	count := len(askIDs(m.report, m.state))
 	if count > 0 {

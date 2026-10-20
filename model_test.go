@@ -98,3 +98,47 @@ func TestPeerActivity(t *testing.T) {
 		})
 	}
 }
+
+func TestHiddenDuplicatePeers(t *testing.T) {
+	now := time.Now()
+	r := Report{Local: Host{Host: "local", Sessions: []Row{{SessionID: "old", Name: "same", Kind: "peer"}, {SessionID: "new", Name: "same", Kind: "peer"}}}}
+	s := State{Sessions: map[string]Record{"old": {Status: "old", UpdatedAt: now.Add(-time.Hour)}, "new": {Status: "new", UpdatedAt: now}}}
+	nodes := BuildTree(r, s, now, nil)[0].Nodes
+	byID := map[string]*Node{}
+	for _, n := range nodes {
+		byID[n.ID] = n
+	}
+	if !byID["old"].HiddenDuplicate || byID["new"].HiddenDuplicate {
+		t.Fatal(nodes)
+	}
+	if got := Render(r, s, now, false); !strings.Contains(got, "скрыто 1") || strings.Contains(got, "same · old") {
+		t.Fatal(got)
+	}
+	for _, activity := range []string{"ask", "live", "lanes"} {
+		t.Run(activity, func(t *testing.T) {
+			copyState := State{Sessions: map[string]Record{"old": s.Sessions["old"], "new": s.Sessions["new"]}}
+			copyReport := r
+			copyReport.Local.Sessions = append([]Row(nil), r.Local.Sessions...)
+			mtime := map[string]time.Time{}
+			switch activity {
+			case "ask":
+				rec := copyState.Sessions["old"]
+				rec.Ask = "question"
+				copyState.Sessions["old"] = rec
+			case "live":
+				mtime["old"] = now
+			case "lanes":
+				copyReport.Local.Sessions = append(copyReport.Local.Sessions, Row{SessionID: "child", Owner: "old", Kind: "lane", Running: true})
+			}
+			for _, n := range BuildTree(copyReport, copyState, now, mtime)[0].Nodes {
+				if n.ID == "old" && n.HiddenDuplicate {
+					t.Fatal("active duplicate hidden", activity)
+				}
+			}
+		})
+	}
+	r.Remote = []Host{{Host: "remote", Sessions: []Row{{SessionID: "remote", Name: "same", Kind: "peer"}}}}
+	if BuildTree(r, s, now, nil)[1].Nodes[0].HiddenDuplicate {
+		t.Fatal("cross-host duplicate hidden")
+	}
+}

@@ -32,6 +32,7 @@ type Node struct {
 	Age                               string
 	Children                          []*Node
 	HasAskBelow                       bool
+	HiddenDuplicate                   bool
 }
 
 func shortID(id string) string {
@@ -146,6 +147,25 @@ func BuildTree(report Report, state State, now time.Time, activity map[string]ti
 			}
 			nodes[id] = n
 		}
+		for id, n := range nodes {
+			if rows[id].Kind != "peer" || n.Name == "" || len(children[id]) > 0 || n.Activity != ActivityIdle {
+				continue
+			}
+			rec := state.Sessions[id]
+			absent := rec.Status == "" || rec.UpdatedAt.IsZero()
+			for otherID, other := range nodes {
+				if otherID == id || n.Name != other.Name {
+					continue
+				}
+				otherRec := state.Sessions[otherID]
+				otherAbsent := otherRec.Status == "" || otherRec.UpdatedAt.IsZero()
+				if (!otherAbsent && (absent || rec.UpdatedAt.Before(otherRec.UpdatedAt))) ||
+					(absent && otherAbsent && (other.Activity != ActivityIdle || len(children[otherID]) > 0 || id > otherID)) {
+					n.HiddenDuplicate = true
+					break
+				}
+			}
+		}
 		sortIDs := func(ids []string) {
 			sort.Slice(ids, func(i, j int) bool {
 				a, b := nodes[ids[i]], nodes[ids[j]]
@@ -205,4 +225,23 @@ func (n *Node) Icon() string {
 	default:
 		return "○"
 	}
+}
+
+func hiddenDuplicates(trees []HostTree) int {
+	count := 0
+	var walk func(*Node)
+	walk = func(n *Node) {
+		if n.HiddenDuplicate {
+			count++
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	for _, h := range trees {
+		for _, n := range h.Nodes {
+			walk(n)
+		}
+	}
+	return count
 }

@@ -36,17 +36,19 @@ bin/bus-status serve -g bus-status
 | l | Toggle status history / live log |
 | L | Give the live log the full body |
 | Esc | Return to history |
-| f | Hide peers with no status and no lanes |
+| f | Show all sessions / hide stale duplicate peers |
 | s | Mute / unmute sound and notifications |
 | q / Ctrl+C | Quit |
 
-The bottom pane shows the last 20 status, ask and model updates, persisted across restarts. Idle sessions whose last update is over ten minutes old are dimmed. Duplicate names get a short ID suffix; unnamed sessions show their harness and short ID. The help stays visible at the bottom, including at 60×20.
+The tree uses a shared table in the TUI and `-once`: session, status, age, shortened model and harness. Child session names omit the parent prefix.
+
+The bottom pane shows the last 20 status, ask and model updates, persisted across restarts. Idle sessions whose last update is over ten minutes old are dimmed. Idle peers with no lanes are hidden when a session on the same host has the same name and a newer status; the header shows `скрыто N`, and `f` reveals them. Active or waiting peers stay visible. Duplicate names get a short ID suffix; unnamed sessions show their harness and short ID. The help stays visible at the bottom, including at 60×20.
 
 The log pane follows the last 200 parsed lines for local Claude, Codex and DSH sessions. It reads native files under `~/.claude/projects`, `~/.codex/sessions` or `~/.codex/archived_sessions`, and `~/.dsh/sessions` (zstd), respectively. Records are labeled `TEXT`, `THINK`, `TOOL`, `RESULT` or `SYS`. Remote-host logs, missing or unreadable files, and unknown products show an explanation in the pane.
 
 A new pending ask plays `/System/Library/Sounds/Glass.aiff` and posts a `bus-status` notification containing the question. While asks remain, a reminder repeats every minute for the oldest pending ask. `-no-sound` starts with both sound and notifications muted; `-sound PATH` selects a different audio file. Unmuting does not replay every old ask. Notifications require macOS to allow them for the invoking application.
 
-Other TUI and `-once` options: `-interval 2s` (roster polling), `-roster-timeout 10s` (default: the greater of the interval and 10s), `-state PATH`, and `-roster "sessionbus roster --json"`. State and the selected live log refresh once per second. The default state file is `$XDG_STATE_HOME/bus-status/state.json`, or `~/.local/state/bus-status/state.json`; an external collector and the TUI must use the same path. Text-frame color requires a terminal and an unset `NO_COLOR`.
+Other TUI and `-once` options: `-interval 2s` (roster polling), `-roster-timeout 10s` (default: the greater of the interval and 10s), `-state PATH`, and `-roster "sessionbus roster --json"`. State and the selected live log refresh once per second (DSH logs at most once every three seconds). The default state file is `$XDG_STATE_HOME/bus-status/state.json`, or `~/.local/state/bus-status/state.json`; an external collector and the TUI must use the same path. Text-frame color requires a terminal and an unset `NO_COLOR`.
 
 Message protocol: send one or more lines with the Sessionbus tool:
 
