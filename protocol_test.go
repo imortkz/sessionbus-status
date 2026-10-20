@@ -89,3 +89,19 @@ func TestApplyTab(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyName(t *testing.T) {
+	t0 := time.Unix(100, 0)
+	rec := Apply(Record{UpdatedAt: t0}, ParseBody("name: bus-status"), t0.Add(time.Hour))
+	if rec.Name != "bus-status" || len(rec.History) != 0 || !rec.UpdatedAt.Equal(t0) {
+		t.Fatalf("%+v", rec)
+	}
+	rec = Apply(rec, []Update{{"name", strings.Repeat("я", 100)}}, t0)
+	if len([]rune(rec.Name)) != 60 {
+		t.Fatalf("not truncated: %d", len([]rune(rec.Name)))
+	}
+	rec = Apply(rec, ParseBody("name: \nstatus: x"), t0)
+	if len([]rune(rec.Name)) != 60 || rec.Status != "x" {
+		t.Fatalf("%+v", rec)
+	}
+}
