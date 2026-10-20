@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"regexp"
@@ -131,13 +132,20 @@ func (n macNotifier) terminalNotifierArgs(title, body string) []string {
 	return args
 }
 
+// notifierTimeout bounds a terminal-notifier call; a hung call falls back to osascript.
+var notifierTimeout = 10 * time.Second
+
 // terminalNotify reports whether terminal-notifier showed the notification.
 func (n macNotifier) terminalNotify(title, body string) bool {
 	run := n.run
 	if run == nil {
 		run = runCapture
 	}
-	out, err := run(exec.Command(n.notifierPath, n.terminalNotifierArgs(title, body)...))
+	ctx, cancel := context.WithTimeout(context.Background(), notifierTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, n.notifierPath, n.terminalNotifierArgs(title, body)...)
+	cmd.WaitDelay = time.Second
+	out, err := run(cmd)
 	return err == nil && !strings.Contains(out, "not allowed") && !strings.Contains(out, "Could not request notification permission")
 }
 func (n macNotifier) osascript(title, body string) {

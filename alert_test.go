@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"reflect"
 	"strings"
@@ -166,5 +167,22 @@ func TestNotifierSuccessSkipsOsascript(t *testing.T) {
 	case args := <-started:
 		t.Fatalf("unexpected fallback %q", args)
 	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestNotifierTimeoutFallsBack(t *testing.T) {
+	script := t.TempDir() + "/terminal-notifier"
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 5\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	saved := notifierTimeout
+	notifierTimeout = 100 * time.Millisecond
+	defer func() { notifierTimeout = saved }()
+	start := time.Now()
+	if (macNotifier{notifierPath: script}).terminalNotify("sessionbus-status", "question") {
+		t.Fatal("hung terminal-notifier reported success")
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Fatalf("timeout not applied: %v", elapsed)
 	}
 }
