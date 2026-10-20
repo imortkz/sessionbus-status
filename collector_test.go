@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	sdk "github.com/antst/sessionbus/bus/sdk/go"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -50,5 +53,47 @@ func TestDeliverSendersAndSaveFailure(t *testing.T) {
 	delivery(t, c, "a", "ask: still accepted")
 	if c.state.Sessions["a"].Ask != "still accepted" {
 		t.Fatal("failed save lost memory update")
+	}
+}
+
+func TestCollectorRecoversBadState(t *testing.T) {
+	for _, unreadable := range []bool{false, true} {
+		t.Run(fmt.Sprint(unreadable), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "state.json")
+			original := []byte(`{"version":1,"sessions":{"partial":{"status":"never trust"}},"broken":`)
+			if err := os.WriteFile(path, original, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if unreadable {
+				if err := os.Chmod(path, 0000); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var warnings bytes.Buffer
+			state := loadCollectorState(path, &warnings)
+			if state.Version != 1 || len(state.Sessions) != 0 {
+				t.Fatalf("recovery state %+v", state)
+			}
+			if !strings.Contains(warnings.String(), "warning") {
+				t.Fatalf("no warning: %q", warnings.String())
+			}
+			backups, err := filepath.Glob(path + ".corrupt-*")
+			if err != nil || len(backups) != 1 {
+				t.Fatalf("backups %v %v", backups, err)
+			}
+			if err := os.Chmod(backups[0], 0600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(backups[0])
+			if err != nil || !bytes.Equal(got, original) {
+				t.Fatalf("backup: %q %v", got, err)
+			}
+			c := &collector{path: path, state: state}
+			delivery(t, c, "fresh", "status: recovered")
+			saved, err := loadState(path)
+			if err != nil || saved.Sessions["fresh"].Status != "recovered" {
+				t.Fatalf("recovery not writable: %+v %v", saved, err)
+			}
+		})
 	}
 }

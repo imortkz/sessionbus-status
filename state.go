@@ -44,10 +44,7 @@ func saveState(path string, state State) error {
 		f.Close()
 		return err
 	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), path)
+	return commitStateFile(f, f.Name(), path)
 }
 func defaultStatePath() string {
 	dir := os.Getenv("XDG_STATE_HOME")
@@ -56,4 +53,19 @@ func defaultStatePath() string {
 		dir = filepath.Join(home, ".local", "state")
 	}
 	return filepath.Join(dir, "bus-status", "state.json")
+}
+
+// Sync and close the completed temporary file before publishing it atomically.
+func commitStateFile(f interface {
+	Sync() error
+	Close() error
+}, temp, path string) error {
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temp, path)
 }

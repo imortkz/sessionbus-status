@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	sdk "github.com/antst/sessionbus/bus/sdk/go"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -47,11 +48,7 @@ func runServe(args []string) int {
 		fmt.Fprintln(os.Stderr, "bus-status: unexpected serve arguments")
 		return 2
 	}
-	state, err := loadState(*path)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "bus-status: load:", err)
-		return 1
-	}
+	state := loadCollectorState(*path, os.Stderr)
 	c := &collector{path: *path, state: state}
 	var shared []string
 	for _, g := range strings.Split(*groups, ",") {
@@ -84,4 +81,17 @@ func runServe(args []string) int {
 			return 1
 		}
 	}
+}
+
+func loadCollectorState(path string, warnings io.Writer) State {
+	state, err := loadState(path)
+	if err == nil {
+		return state
+	}
+	fmt.Fprintln(warnings, "bus-status: warning: cannot load state:", err)
+	backup := fmt.Sprintf("%s.corrupt-%d", path, time.Now().Unix())
+	if err := os.Rename(path, backup); err != nil {
+		fmt.Fprintln(warnings, "bus-status: warning: cannot preserve bad state:", err)
+	}
+	return State{Version: 1, Sessions: make(map[string]Record)}
 }
