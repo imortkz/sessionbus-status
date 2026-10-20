@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 )
@@ -86,151 +85,72 @@ func Render(report Report, state State, now time.Time, color bool) string {
 	if report.Error != "" {
 		out.WriteString("Ошибка: " + sanitize(report.Error) + "\n")
 	}
-	renderHost(&out, report.Local, state, now, color, false)
-	for _, host := range report.Remote {
-		renderHost(&out, host, state, now, color, true)
+	for _, host := range BuildTree(report, state, now) {
+		renderHost(&out, host, color)
 	}
 	return out.String()
 }
-func rowName(row Row) string {
-	if row.Name != "" {
-		return sanitize(row.Name)
-	}
-	return sanitize(row.SessionID)
-}
-func renderHost(out *strings.Builder, host Host, state State, now time.Time, color, remote bool) {
+func renderHost(out *strings.Builder, host HostTree, color bool) {
 	if host.Error != "" {
-		fmt.Fprintf(out, "── %s: недоступен (%s)\n", sanitize(host.Host), sanitize(host.Error))
+		fmt.Fprintf(out, "── %s: недоступен (%s)\n", host.Host, host.Error)
 		return
 	}
-	if remote {
-		fmt.Fprintf(out, "── %s\n", sanitize(host.Host))
+	if !host.Local {
+		fmt.Fprintf(out, "── %s\n", host.Host)
 	}
-	rows := make(map[string]Row)
-	visible := make([]Row, 0, len(host.Sessions))
-	for _, row := range host.Sessions {
-		if row.Product == "bus-status" {
-			continue
-		}
-		rows[row.SessionID] = row
-		visible = append(visible, row)
-	}
-	host.Sessions = visible
-	children := make(map[string][]Row)
-	var roots []Row
-	for _, row := range host.Sessions {
-		if _, ok := rows[row.Owner]; row.Owner == "" || !ok {
-			roots = append(roots, row)
-		} else {
-			children[row.Owner] = append(children[row.Owner], row)
-		}
-	}
-	var hasAsk func(Row, map[string]bool) bool
-	hasAsk = func(row Row, seen map[string]bool) bool {
-		if seen[row.SessionID] {
-			return false
-		}
-		seen[row.SessionID] = true
-		if sanitize(state.Sessions[row.SessionID].Ask) != "" {
-			return true
-		}
-		for _, child := range children[row.SessionID] {
-			if hasAsk(child, seen) {
-				return true
-			}
-		}
-		return false
-	}
-	sortRows := func(list []Row) {
-		sort.SliceStable(list, func(i, j int) bool {
-			a, b := list[i], list[j]
-			aa, ba := hasAsk(a, make(map[string]bool)), hasAsk(b, make(map[string]bool))
-			if aa != ba {
-				return aa
-			}
-			if a.Running != b.Running {
-				return a.Running
-			}
-			an, bn := rowName(a), rowName(b)
-			if an != bn {
-				return an < bn
-			}
-			return a.SessionID < b.SessionID
-		})
-	}
-	visited := make(map[string]bool)
-	var draw func(Row, string, string, string)
-	draw = func(row Row, prefix, branch, continuation string) {
-		if visited[row.SessionID] {
-			return
-		}
-		visited[row.SessionID] = true
-		rec, exists := state.Sessions[row.SessionID]
-		ask := sanitize(rec.Ask)
+	var draw func(*Node, string, string, string)
+	draw = func(n *Node, prefix, branch, continuation string) {
 		icon := "○"
-		if row.Running {
+		if n.Running {
 			icon = "●"
 		}
-		if ask != "" {
+		if n.Ask {
 			icon = "⚠"
 		}
-		product := sanitize(row.Product)
-		harness := strings.TrimSuffix(product, "-peer")
-		if product == "sessionbus-dsh" {
-			harness = "dsh"
+		harness := n.Harness
+		if n.Model != "" {
+			harness += " · " + n.Model
 		}
-		if model := sanitize(rec.Model); model != "" {
-			harness += " · " + model
+		status := n.Line
+		if n.Age != "" {
+			status += "  " + n.Age
 		}
-		status := sanitize(rec.Status)
-		if ask != "" {
-			status = "ЖДЁТ: " + ask
-		}
-		if status == "" {
-			status = "нет статуса"
-		}
-		if exists && !rec.UpdatedAt.IsZero() {
-			status += "  " + age(now.Sub(rec.UpdatedAt))
-		}
-		sub := children[row.SessionID]
-		sortRows(sub)
 		statusPrefix := prefix + continuation + "   "
 		if branch == "" {
 			statusPrefix = "     "
-			if len(sub) > 0 {
+			if len(n.Children) > 0 {
 				statusPrefix = "  │  "
 			}
 		}
-		line1 := prefix + branch + icon + " " + rowName(row) + "    " + harness
+		line1 := prefix + branch + icon + " " + n.Display + "    " + harness
 		line2 := statusPrefix + status
-		if ask != "" && color {
-			line1 = "\x1b[31m" + line1 + "\x1b[0m"
-			line2 = "\x1b[31m" + line2 + "\x1b[0m"
+		if color {
+			style := ""
+			if n.Ask {
+				style = "\x1b[31m"
+			} else if n.Stale {
+				style = "\x1b[2m"
+			}
+			if style != "" {
+				line1 = style + line1 + "\x1b[0m"
+				line2 = style + line2 + "\x1b[0m"
+			}
 		}
 		out.WriteString(line1 + "\n" + line2 + "\n")
 		childPrefix := prefix + continuation
 		if branch == "" {
 			childPrefix = "  "
 		}
-		for i, child := range sub {
-			b, c := "├─ ", "│ "
-			if i == len(sub)-1 {
-				b, c = "└─ ", "  "
+		for i, c := range n.Children {
+			b, k := "├─ ", "│ "
+			if i == len(n.Children)-1 {
+				b, k = "└─ ", "  "
 			}
-			draw(child, childPrefix, b, c)
+			draw(c, childPrefix, b, k)
 		}
 	}
-	sortRows(roots)
-	for _, row := range roots {
-		draw(row, "", "", "")
-	}
-	// Malformed owner cycles still get displayed once, rather than disappearing.
-	remaining := append([]Row(nil), host.Sessions...)
-	sortRows(remaining)
-	for _, row := range remaining {
-		if !visited[row.SessionID] {
-			draw(row, "", "", "")
-		}
+	for _, n := range host.Nodes {
+		draw(n, "", "", "")
 	}
 }
 func age(d time.Duration) string {

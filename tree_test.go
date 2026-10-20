@@ -55,7 +55,7 @@ func TestRenderOrphansHostsAndErrors(t *testing.T) {
 	report.Error = "partial"
 	report.Remote = append(report.Remote, Host{Host: "remote", Sessions: []Row{{SessionID: "remote-a", Product: "codex-peer"}}})
 	got := Render(report, state, now, false)
-	for _, want := range []string{"\n● orphan@macbook", "── office: недоступен (offline)", "── remote\n○ remote-a", "федерация неполная", "partial"} {
+	for _, want := range []string{"\n● orphan@macbook", "── office: недоступен (offline)", "── remote\n○ codex · remote-a", "федерация неполная", "partial"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in %s", want, got)
 		}
@@ -69,7 +69,7 @@ func TestRenderOrphansHostsAndErrors(t *testing.T) {
 	state.Sessions["master@macbook"] = Record{}
 	state.Sessions["grandchild"] = Record{Ask: "question"}
 	got = Render(report, state, now, false)
-	if strings.Index(got, "openclaw-peer") > strings.Index(got, "orphan@macbook") || strings.Index(got, "researcher-bus") > strings.Index(got, "developer-bus") || !strings.Contains(got, "⚠ grandchild") {
+	if strings.Index(got, "openclaw-peer") > strings.Index(got, "orphan@macbook") || strings.Index(got, "researcher-bus") > strings.Index(got, "developer-bus") || !strings.Contains(got, "⚠ codex · grandchi") {
 		t.Fatal(got)
 	}
 }
