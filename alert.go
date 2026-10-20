@@ -128,9 +128,12 @@ func (n macNotifier) launch(name string, args ...string) {
 func (n macNotifier) Sound(path string) { n.launch("afplay", path) }
 
 // selectITermCommand runs under /bin/sh from terminal-notifier -execute. Only a
-// GUID that passed validITermGUID is interpolated; the check lives here too
-// because Notify can receive a Tab that bypassed the protocol parser.
+// GUID that passes validITermGUID is interpolated (Notify can receive a Tab that
+// bypassed the protocol parser); anything else yields "".
 func selectITermCommand(guid string) string {
+	if !validITermGUID(guid) {
+		return ""
+	}
 	script := `tell application "iTerm2"
 repeat with w in windows
 repeat with t in tabs of w
@@ -153,8 +156,8 @@ func (n macNotifier) terminalNotifierArgs(nt Notice) []string {
 		group += ":" + nt.ID
 	}
 	args := []string{"-title", nt.Title, "-message", nt.Body, "-group", group}
-	if validITermGUID(nt.Tab) {
-		args = append(args, "-execute", selectITermCommand(nt.Tab))
+	if cmd := selectITermCommand(nt.Tab); cmd != "" {
+		args = append(args, "-execute", cmd)
 	} else if n.bundle != "" {
 		args = append(args, "-activate", n.bundle)
 	}

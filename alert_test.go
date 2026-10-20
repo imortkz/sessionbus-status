@@ -250,3 +250,14 @@ func TestAlertScheduleCarriesIDAndTab(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestSelectITermCommandRejectsInvalid(t *testing.T) {
+	for _, g := range []string{"", testGUID + "'; touch x; '", "w1t6p0:" + testGUID} {
+		if got := selectITermCommand(g); got != "" {
+			t.Fatalf("%q: %q", g, got)
+		}
+	}
+	if selectITermCommand(testGUID) == "" {
+		t.Fatal("valid GUID rejected")
+	}
+}
