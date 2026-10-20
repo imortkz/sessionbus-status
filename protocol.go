@@ -1,0 +1,72 @@
+package main
+
+import (
+	"strings"
+	"time"
+	"unicode"
+)
+
+type Record struct {
+	Product   string    `json:"product"`
+	Model     string    `json:"model"`
+	Status    string    `json:"status"`
+	Ask       string    `json:"ask"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+type Update struct{ Kind, Text string }
+
+func sanitize(text string) string {
+	text = strings.Map(func(r rune) rune {
+		if r == '\t' || r == '\n' || r == '\r' {
+			return ' '
+		}
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, text)
+	runes := []rune(strings.TrimSpace(text))
+	if len(runes) > 120 {
+		runes = runes[:120]
+	}
+	return string(runes)
+}
+func ParseBody(body string) []Update {
+	var updates []Update
+	for _, line := range strings.Split(body, "\n") {
+		kind, text, ok := strings.Cut(strings.TrimSpace(line), ":")
+		if !ok {
+			continue
+		}
+		kind = strings.ToLower(kind)
+		if kind != "status" && kind != "ask" && kind != "model" {
+			continue
+		}
+		text = sanitize(text)
+		if text != "" {
+			updates = append(updates, Update{kind, text})
+		}
+	}
+	return updates
+}
+func Apply(rec Record, updates []Update, now time.Time) Record {
+	for _, u := range updates {
+		text := sanitize(u.Text)
+		if text == "" {
+			continue
+		}
+		switch u.Kind {
+		case "status":
+			rec.Status = text
+			rec.Ask = ""
+		case "ask":
+			rec.Ask = text
+		case "model":
+			rec.Model = text
+		default:
+			continue
+		}
+		rec.UpdatedAt = now
+	}
+	return rec
+}
