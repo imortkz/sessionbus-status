@@ -273,7 +273,7 @@ func TestCollectorDecision(t *testing.T) {
 			defer cancel()
 			m := newModel(tuiConfig{ctx: ctx, groups: "bus-status,project", statePath: "test-state", muted: true, interval: time.Second})
 			m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-			m.startCollector = func(got context.Context, p, g string) error {
+			m.startCollector = func(got context.Context, p, g string, _ io.Writer) error {
 				called++
 				if got != ctx || p != "test-state" || g != "bus-status,project" {
 					t.Fatal("collector configuration")
@@ -414,7 +414,7 @@ func TestCollectorFailureRetry(t *testing.T) {
 	m.ownCollector = false
 	m.report.Local.Sessions = nil
 	calls := 0
-	m.startCollector = func(context.Context, string, string) error {
+	m.startCollector = func(context.Context, string, string, io.Writer) error {
 		calls++
 		return fmt.Errorf("offline\x1b\u202e%s", strings.Repeat("x", 250))
 	}
@@ -453,7 +453,12 @@ func TestCollectorShutdownWait(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	m := newModel(tuiConfig{ctx: ctx, cancel: cancel, collectorWG: wg})
 	started, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	m.startCollector = func(ctx context.Context, _, _ string) error { close(started); <-ctx.Done(); <-release; return nil }
+	m.startCollector = func(ctx context.Context, _, _ string, _ io.Writer) error {
+		close(started)
+		<-ctx.Done()
+		<-release
+		return nil
+	}
 	cmd := m.collectorDecision()
 	go func() { cmd(); close(finished) }()
 	<-started
@@ -907,4 +912,84 @@ func TestVisibleDuplicateSuffixes(t *testing.T) {
 	if strings.Contains(stripANSI(m.View()), "same ·") {
 		t.Fatal("suffix retained", m.View())
 	}
+}
+
+func TestCollectorDiagnosticsStayOffTerminal(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m, _, _, _ := testModel(t)
+	m.config.ctx = ctx
+	m.collectorDecided = false
+	m.ownCollector = false
+	m.report.Local.Sessions = nil
+	logPath := filepath.Join(filepath.Dir(m.config.statePath), "collector.log")
+	putLog(t, logPath, []byte("previous\n"))
+	started, done := make(chan struct{}), make(chan struct{})
+	var diagnostics io.Writer
+	m.startCollector = func(ctx context.Context, _, _ string, w io.Writer) error {
+		diagnostics = w
+		fmt.Fprintln(w, "bus-status: connected")
+		close(started)
+		<-ctx.Done()
+		return nil
+	}
+	stdout, stderr := captureTerminal(t, func() {
+		cmd := m.collectorDecision()
+		go func() { cmd(); close(done) }()
+		defer func() { cancel(); <-done }()
+		<-started
+		m.Update(m.pollCollectorDiagnostics()())
+		if !strings.Contains(stripANSI(m.View()), uiCollector+uiCollectorOwn+" (connected)") || m.collectorLast != "connected" {
+			t.Fatal(m.View())
+		}
+		// Exercise the actual state recovery and delivery failure paths with this writer.
+		bad := filepath.Join(t.TempDir(), "bad-state")
+		putLog(t, bad, []byte("invalid"))
+		loadCollectorState(bad, diagnostics)
+		blocked := filepath.Join(t.TempDir(), "file")
+		putLog(t, blocked, nil)
+		c := &collector{path: filepath.Join(blocked, "state.json"), diagnostics: diagnostics}
+		delivery(t, c, "sender", "status: working")
+		fmt.Fprintln(diagnostics, "bus-status: save: failed\x1b\u202e")
+		m.Update(m.pollCollectorDiagnostics()())
+		if m.collectorLast != "save: failed" || !strings.Contains(stripANSI(m.View()), uiCollectorError+"save: failed") {
+			t.Fatal(m.View())
+		}
+		if strings.ContainsAny(m.collectorLast+m.collectorErr, "\x1b\u202e") {
+			t.Fatal("unsafe diagnostic")
+		}
+	})
+	if stdout != "" || stderr != "" {
+		t.Fatalf("stray terminal output: stdout=%q stderr=%q", stdout, stderr)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"previous\n", "bus-status: connected", "warning: cannot load state", "bus-status: save:"} {
+		if !strings.Contains(string(data), want) {
+			t.Fatal("missing log entry", want, string(data))
+		}
+	}
+}
+
+func captureTerminal(t *testing.T, fn func()) (string, string) {
+	t.Helper()
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	errR, errW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldOut, oldErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outW, errW
+	defer func() { os.Stdout, os.Stderr = oldOut, oldErr; outW.Close(); errW.Close(); outR.Close(); errR.Close() }()
+	fn()
+	outW.Close()
+	errW.Close()
+	out, _ := io.ReadAll(outR)
+	stderr, _ := io.ReadAll(errR)
+	return string(out), string(stderr)
 }

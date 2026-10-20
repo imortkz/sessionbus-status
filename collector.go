@@ -15,9 +15,10 @@ import (
 )
 
 type collector struct {
-	path  string
-	mu    sync.Mutex
-	state State
+	diagnostics io.Writer
+	path        string
+	mu          sync.Mutex
+	state       State
 }
 
 func (c *collector) deliver(_ context.Context, _ sdk.PeerIdentity, req sdk.DeliveryRequest) (sdk.DeliveryReceipt, error) {
@@ -33,7 +34,7 @@ func (c *collector) deliver(_ context.Context, _ sdk.PeerIdentity, req sdk.Deliv
 		c.state.Sessions[req.From.SessionID] = rec
 		c.state.Version = 2
 		if err := saveState(c.path, c.state); err != nil {
-			fmt.Fprintln(os.Stderr, "bus-status: save:", err)
+			fmt.Fprintln(c.diagnosticWriter(), "bus-status: save:", err)
 		}
 	}
 	return sdk.DeliveryReceipt{Disposition: "written"}, nil
@@ -51,16 +52,19 @@ func runServe(args []string) int {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := startCollector(ctx, *path, *groups); err != nil {
+	if err := startCollector(ctx, *path, *groups, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "bus-status:", err)
 		return 1
 	}
 	return 0
 }
 
-func startCollector(ctx context.Context, path, groups string) error {
-	state := loadCollectorState(path, os.Stderr)
-	c := &collector{path: path, state: state}
+func startCollector(ctx context.Context, path, groups string, diagnostics io.Writer) error {
+	if diagnostics == nil {
+		diagnostics = io.Discard
+	}
+	state := loadCollectorState(path, diagnostics)
+	c := &collector{path: path, state: state, diagnostics: diagnostics}
 	var shared []string
 	for _, g := range strings.Split(groups, ",") {
 		if g = strings.TrimSpace(g); g != "" {
@@ -76,7 +80,7 @@ func startCollector(ctx context.Context, path, groups string) error {
 	for {
 		select {
 		case <-ready:
-			fmt.Fprintln(os.Stderr, "bus-status: connected")
+			fmt.Fprintln(diagnostics, "bus-status: connected")
 			ready = nil
 		case <-ctx.Done():
 			peer.Shutdown()
@@ -101,4 +105,11 @@ func loadCollectorState(path string, warnings io.Writer) State {
 		fmt.Fprintln(warnings, "bus-status: warning: cannot preserve bad state:", err)
 	}
 	return State{Version: 1, Sessions: make(map[string]Record)}
+}
+
+func (c *collector) diagnosticWriter() io.Writer {
+	if c.diagnostics != nil {
+		return c.diagnostics
+	}
+	return io.Discard
 }

@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -68,6 +70,8 @@ type Model struct {
 	showAll, muted                 bool
 	collectorMode                  string
 	collectorErr                   string
+	collectorLast                  string
+	diagnostics                    *collectorDiagnostics
 	collectorRetryAt               time.Time
 	collectorDecided, ownCollector bool
 	width, height                  int
@@ -84,7 +88,7 @@ type Model struct {
 	notifier                       Notifier
 	alerts                         Alerts
 	now                            func() time.Time
-	startCollector                 func(context.Context, string, string) error
+	startCollector                 func(context.Context, string, string, io.Writer) error
 	readLog                        logReadFunc
 }
 type keyMap []key.Binding
@@ -345,6 +349,9 @@ func (m *Model) collectorDecision() tea.Cmd {
 	m.collectorMode = uiCollectorOwn
 	m.ownCollector = true
 	start, c := m.startCollector, m.config
+	diagnostics := &collectorDiagnostics{path: filepath.Join(filepath.Dir(c.statePath), "collector.log")}
+	m.diagnostics = diagnostics
+	m.collectorLast = ""
 	if c.collectorWG != nil {
 		c.collectorWG.Add(1)
 	}
@@ -352,7 +359,11 @@ func (m *Model) collectorDecision() tea.Cmd {
 		if c.collectorWG != nil {
 			defer c.collectorWG.Done()
 		}
-		return collectorMsg{start(c.ctx, c.statePath, c.groups)}
+		err := start(c.ctx, c.statePath, c.groups, diagnostics)
+		if err != nil {
+			fmt.Fprintln(diagnostics, uiAppName+": "+err.Error())
+		}
+		return collectorMsg{err}
 	}
 }
 func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
@@ -378,7 +389,7 @@ func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 	case rosterTick:
 		return m, m.pollRoster()
 	case clockTick:
-		return m, tea.Batch(m.pollState(), m.requestLog(), secondTick())
+		return m, tea.Batch(m.pollState(), m.requestLog(), m.pollCollectorDiagnostics(), secondTick())
 	case rosterMsg:
 		delay := tea.Tick(m.config.interval, func(time.Time) tea.Msg { return rosterTick{} })
 		if msg.err != nil {
@@ -402,6 +413,18 @@ func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		m.stateErr = ""
 		m.rebuild()
 		return m, m.alertCmd()
+	case collectorDiagnosticMsg:
+		if msg.source != m.diagnostics || msg.line == "" {
+			return m, nil
+		}
+		m.collectorLast = cleanText(msg.line, 200)
+		if m.collectorLast == uiCollectorConnected {
+			if m.ownCollector {
+				m.collectorErr = ""
+			}
+		} else {
+			m.collectorErr = m.collectorLast
+		}
 	case collectorMsg:
 		if m.config.ctx.Err() == nil {
 			m.collectorMode = uiCollectorMissing
@@ -579,6 +602,11 @@ func (m *Model) View() string {
 		icon = "🔇"
 	}
 	collector := uiCollector + m.collectorMode
+	if m.collectorErr != "" {
+		collector = uiCollectorError + m.collectorErr
+	} else if m.ownCollector && m.collectorLast == uiCollectorConnected {
+		collector += " (" + uiCollectorConnected + ")"
+	}
 	if m.collectorMode == uiCollectorMissing {
 		collector = "\x1b[31m" + collector + "\x1b[0m"
 	}
