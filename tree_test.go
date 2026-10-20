@@ -23,7 +23,7 @@ func fixture(t *testing.T) (Report, State, time.Time) {
 		"master@macbook":     {Model: "claude-opus-5-5", Ask: "одобрить PLAN bus-status", UpdatedAt: now.Add(-3 * time.Minute)},
 		"developer@macbook":  {Model: "gpt-6.1-sol", Status: "волна 1: пишу сборщик", UpdatedAt: now.Add(-45 * time.Second)},
 		"researcher@macbook": {Model: "claude-sonnet-5-5"},
-		"bus-status@macbook": {Ask: "collector must stay hidden"},
+		"bus-status@macbook": {Product: "bus-status", Ask: "collector must stay hidden"},
 	}}
 	return report, state, now
 }

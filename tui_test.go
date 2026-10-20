@@ -188,6 +188,7 @@ func TestAlertDispatch(t *testing.T) {
 	m.notifier = n
 	m.muted = false
 	m.alerts = Alerts{}
+	m.alerts.Tick(now, nil)
 	_, cmd := m.Update(rosterMsg{report: r})
 	runActions(cmd)
 	if len(n.sounds) != 1 || n.sounds[0] != "test.aiff" || len(n.bodies) != 1 || !strings.Contains(n.bodies[0], "одобрить PLAN") {
@@ -461,4 +462,60 @@ func TestCollectorShutdownWait(t *testing.T) {
 		t.Fatal("collector did not finish")
 	}
 	<-finished
+}
+
+func TestAlertRosterFlap(t *testing.T) {
+	m, r, s, now := testModel(t)
+	n := &fakeNotifier{}
+	m.notifier = n
+	m.muted = false
+	m.alerts = Alerts{}
+	runActions(m.alertCmd())
+	if len(n.sounds) != 0 {
+		t.Fatal("startup burst")
+	}
+	now = now.Add(10 * time.Second)
+	m.now = func() time.Time { return now }
+	m.report.Local.Sessions = nil
+	m.rebuild()
+	runActions(m.alertCmd())
+	m.report = r
+	m.rebuild()
+	runActions(m.alertCmd())
+	if len(n.sounds) != 0 {
+		t.Fatal("roster flap re-fired")
+	}
+	now = now.Add(50 * time.Second)
+	runActions(m.alertCmd())
+	if len(n.sounds) != 1 {
+		t.Fatal("reminder lost", n)
+	}
+	rec := s.Sessions["master@macbook"]
+	rec.Ask = ""
+	s.Sessions["master@macbook"] = rec
+	_, cmd := m.Update(stateMsg{state: s})
+	runActions(cmd)
+	rec.Ask = "new question"
+	s.Sessions["master@macbook"] = rec
+	_, cmd = m.Update(stateMsg{state: s})
+	runActions(cmd)
+	if len(n.sounds) != 2 {
+		t.Fatal("state clear not observed", n)
+	}
+}
+
+func TestAlertsWaitForInitialState(t *testing.T) {
+	r, s, _ := fixture(t)
+	m := newModel(tuiConfig{muted: false})
+	m.collectorDecided = true
+	n := &fakeNotifier{}
+	m.notifier = n
+	m.report = r
+	m.rebuild()
+	runActions(m.alertCmd())
+	_, cmd := m.Update(stateMsg{state: s})
+	runActions(cmd)
+	if len(n.sounds) != 0 {
+		t.Fatal("initial state asks fired", n)
+	}
 }

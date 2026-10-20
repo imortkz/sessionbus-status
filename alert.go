@@ -12,9 +12,10 @@ type AskInfo struct {
 }
 type Action struct{ Kind, Title, Body string }
 type Alerts struct {
-	muted bool
-	last  time.Time
-	known map[string]bool
+	initialized bool
+	muted       bool
+	last        time.Time
+	known       map[string]bool
 }
 
 func (a *Alerts) Tick(now time.Time, asks []AskInfo) []Action {
@@ -25,6 +26,15 @@ func (a *Alerts) Tick(now time.Time, asks []AskInfo) []Action {
 		}
 		return asks[i].ID < asks[j].ID
 	})
+	if !a.initialized {
+		a.initialized = true
+		a.last = now
+		a.known = map[string]bool{}
+		for _, ask := range asks {
+			a.known[ask.ID] = true
+		}
+		return nil
+	}
 	if len(asks) == 0 {
 		a.known = nil
 		a.last = time.Time{}

@@ -55,6 +55,7 @@ type Model struct {
 	state                          State
 	tree                           []HostTree
 	activity                       map[string]time.Time
+	stateLoaded                    bool
 	selected                       string
 	collapsed                      map[string]bool
 	pane                           string
@@ -217,20 +218,15 @@ func (m *Model) selectedRow() (visibleNode, bool) {
 	return visibleNode{}, false
 }
 func (m *Model) alertCmd() tea.Cmd {
+	if !m.stateLoaded {
+		return nil
+	}
 	var asks []AskInfo
+	displays := map[string]string{}
+	collectors := map[string]bool{}
 	var walk func(*Node)
 	walk = func(n *Node) {
-		if n.Ask {
-			rec := m.state.Sessions[n.ID]
-			since := rec.UpdatedAt
-			for i := len(rec.History) - 1; i >= 0; i-- {
-				if rec.History[i].Kind == "ask" {
-					since = rec.History[i].At
-					break
-				}
-			}
-			asks = append(asks, AskInfo{n.ID, n.Display, rec.Ask, since})
-		}
+		displays[n.ID] = n.Display
 		for _, c := range n.Children {
 			walk(c)
 		}
@@ -239,6 +235,30 @@ func (m *Model) alertCmd() tea.Cmd {
 		for _, n := range h.Nodes {
 			walk(n)
 		}
+	}
+	for _, h := range append([]Host{m.report.Local}, m.report.Remote...) {
+		for _, r := range h.Sessions {
+			if r.Product == "bus-status" {
+				collectors[r.SessionID] = true
+			}
+		}
+	}
+	for id, rec := range m.state.Sessions {
+		if cleanText(rec.Ask, 120) == "" || rec.Product == "bus-status" || collectors[id] {
+			continue
+		}
+		display := displays[id]
+		if display == "" {
+			display = cleanText(id, 120)
+		}
+		since := rec.UpdatedAt
+		for i := len(rec.History) - 1; i >= 0; i-- {
+			if rec.History[i].Kind == "ask" {
+				since = rec.History[i].At
+				break
+			}
+		}
+		asks = append(asks, AskInfo{id, display, rec.Ask, since})
 	}
 	m.alerts.muted = m.muted
 	actions := m.alerts.Tick(m.now(), asks)
@@ -339,6 +359,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.state = msg.state
+		m.stateLoaded = true
 		m.stateErr = ""
 		m.rebuild()
 		return m, m.alertCmd()
