@@ -62,3 +62,30 @@ func TestModelPreservesStatusAge(t *testing.T) {
 		t.Fatal(rec)
 	}
 }
+
+func TestApplyTab(t *testing.T) {
+	const guid = "0EB11E86-12BA-4739-B792-1F3699034011"
+	t0 := time.Unix(100, 0)
+	for _, v := range []string{guid, "w1t6p0:" + guid} {
+		rec := Apply(Record{}, ParseBody("tab: "+v), t0)
+		if rec.Tab != guid || len(rec.History) != 0 || !rec.UpdatedAt.IsZero() {
+			t.Fatalf("%q: %+v", v, rec)
+		}
+	}
+	base := Record{Tab: guid, UpdatedAt: t0}
+	for _, v := range []string{guid + "'", "w1t6p0:" + guid + "$(x)", "a b", guid + "x", guid[:35], "'" + guid, "w1t6p0:", ""} {
+		rec := Apply(base, ParseBody("tab: "+v), t0.Add(time.Hour))
+		if rec.Tab != guid || len(rec.History) != 0 || !rec.UpdatedAt.Equal(t0) {
+			t.Fatalf("%q: %+v", v, rec)
+		}
+	}
+	rec := Apply(base, ParseBody("status: working"), t0.Add(time.Hour))
+	if rec.Tab != guid || rec.Status != "working" {
+		t.Fatalf("status cleared tab: %+v", rec)
+	}
+	for _, e := range rec.History {
+		if e.Kind == "tab" {
+			t.Fatal("tab in history")
+		}
+	}
+}
