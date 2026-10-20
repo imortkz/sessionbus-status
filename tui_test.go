@@ -222,12 +222,11 @@ func TestLogReadGeneration(t *testing.T) {
 		calls++
 		return &LogReader{}, []LogLine{{Kind: "TEXT", Text: "fresh"}}, nil
 	}
-	press(m, "l")
-	_, cmd := m.Update(logTick{})
+	cmd := press(m, "l")
 	if calls != 0 || !m.inFlight || cmd == nil {
 		t.Fatal("I/O ran in Update")
 	}
-	_, again := m.Update(logTick{})
+	again := m.requestLog()
 	if again != nil {
 		t.Fatal("overlapping read")
 	}
@@ -236,15 +235,14 @@ func TestLogReadGeneration(t *testing.T) {
 		t.Fatal(calls)
 	}
 	oldGen := m.generation
-	press(m, "down")
+	cmd = press(m, "down")
 	if m.generation == oldGen {
 		t.Fatal("no generation change")
 	}
 	m.Update(msg)
-	if len(m.logLines) != 0 || m.inFlight {
+	if len(m.logLines) != 0 || !m.inFlight {
 		t.Fatal("stale result applied")
 	}
-	_, cmd = m.Update(logTick{})
 	m.Update(cmd())
 	if len(m.logLines) != 1 || m.logLines[0].Text != "fresh" || m.inFlight {
 		t.Fatal(m.logLines)
@@ -326,16 +324,14 @@ func TestLocalLogCommand(t *testing.T) {
 	m := newModel(tuiConfig{home: home, muted: true, interval: time.Second})
 	m.collectorDecided = true
 	m.Update(rosterMsg{report: Report{Local: Host{Host: "local-alias", Sessions: []Row{{SessionID: "abc@local-alias", Product: "claude-peer"}}}}})
-	press(m, "l")
-	_, cmd := m.Update(logTick{})
+	cmd := press(m, "l")
 	m.Update(cmd())
 	if m.logErr != "" || len(m.logLines) != 5 {
 		t.Fatal(m.logErr, m.logLines)
 	}
 	r := Report{Local: Host{Host: "local-alias"}, Remote: []Host{{Host: "remote", Sessions: []Row{{SessionID: "abc@remote", Product: "claude-peer"}}}}}
-	m.Update(rosterMsg{report: r})
-	_, cmd = m.Update(logTick{})
-	m.Update(cmd())
+	_, cmd = m.Update(rosterMsg{report: r})
+	applyLogCommand(m, cmd)
 	if !strings.Contains(m.logErr, "remote-host") || len(m.logLines) != 0 {
 		t.Fatal(m.logErr, m.logLines)
 	}
@@ -558,5 +554,42 @@ func TestLogMovedToArchive(t *testing.T) {
 	r, lines, err := m.readLog(r, row)
 	if err != nil || len(lines) != 5 || r.path != archived {
 		t.Fatal(r, lines, err)
+	}
+}
+
+func TestStateGuardAndImmediateLog(t *testing.T) {
+	m, _, _, _ := testModel(t)
+	cmd := m.pollState()
+	if cmd == nil || m.pollState() != nil {
+		t.Fatal("overlapping state poll")
+	}
+	m.Update(cmd())
+	if m.pollState() == nil {
+		t.Fatal("state guard not cleared")
+	}
+	m.readLog = func(*LogReader, visibleNode) (*LogReader, []LogLine, error) { return &LogReader{}, nil, nil }
+	cmd = press(m, "l")
+	if cmd == nil || !m.inFlight {
+		t.Fatal("log read waits for timer")
+	}
+	m.Update(cmd())
+	cmd = press(m, "down")
+	if cmd == nil || !m.inFlight {
+		t.Fatal("selection read waits for timer")
+	}
+	m.Update(cmd())
+}
+
+func applyLogCommand(m *Model, cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		for _, c := range msg {
+			applyLogCommand(m, c)
+		}
+	case logMsg:
+		m.Update(msg)
 	}
 }

@@ -12,6 +12,9 @@ type HostTree struct {
 	Local bool
 	Nodes []*Node
 }
+
+const noStatus = "нет статуса"
+
 type Activity string
 
 const (
@@ -117,7 +120,7 @@ func BuildTree(report Report, state State, now time.Time, activity map[string]ti
 				line = "ЖДЁТ: " + cleanText(rec.Ask, 120)
 			}
 			if line == "" {
-				line = "нет статуса"
+				line = noStatus
 			}
 			n := &Node{ID: id, Display: display, Harness: h, Model: cleanText(rec.Model, 120), Line: line, Ask: ask, Running: row.Running, HasAskBelow: hasAsk(id, map[string]bool{})}
 			live := row.Running

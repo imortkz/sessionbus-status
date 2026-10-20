@@ -35,7 +35,6 @@ type stateMsg struct {
 }
 type rosterTick struct{}
 type clockTick struct{}
-type logTick struct{}
 type collectorMsg struct{ err error }
 type logMsg struct {
 	gen    uint64
@@ -57,6 +56,7 @@ type Model struct {
 	tree                           []HostTree
 	activity                       map[string]time.Time
 	stateLoaded                    bool
+	stateInFlight                  bool
 	selected                       string
 	collapsed                      map[string]bool
 	pane                           string
@@ -148,6 +148,10 @@ func (m *Model) pollRoster() tea.Cmd {
 	}
 }
 func (m *Model) pollState() tea.Cmd {
+	if m.stateInFlight {
+		return nil
+	}
+	m.stateInFlight = true
 	p, home := m.config.statePath, m.config.home
 	rows := append([]Row(nil), m.report.Local.Sessions...)
 	now := m.now
@@ -171,7 +175,7 @@ func (m *Model) visible() []visibleNode {
 	var rows []visibleNode
 	var walk func(*Node, HostTree, int)
 	walk = func(n *Node, h HostTree, depth int) {
-		if m.filter && n.Line == "нет статуса" && len(n.Children) == 0 {
+		if m.filter && n.Line == noStatus && len(n.Children) == 0 {
 			return
 		}
 		rows = append(rows, visibleNode{n, h.Host, h.Local, depth})
@@ -339,7 +343,20 @@ func (m *Model) collectorDecision() tea.Cmd {
 		return collectorMsg{start(c.ctx, c.statePath, c.groups)}
 	}
 }
-func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
+	gen, pane := m.generation, m.pane
+	defer func() {
+		if gen != m.generation || pane != m.pane {
+			if log := m.requestLog(); log != nil {
+				if cmd == nil {
+					cmd = log
+				} else {
+					cmd = tea.Batch(cmd, log)
+				}
+			}
+		}
+	}()
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.sized = true
@@ -349,8 +366,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.pollRoster()
 	case clockTick:
 		return m, tea.Batch(m.pollState(), m.requestLog(), secondTick())
-	case logTick:
-		return m, m.requestLog()
 	case rosterMsg:
 		delay := tea.Tick(m.config.interval, func(time.Time) tea.Msg { return rosterTick{} })
 		if msg.err != nil {
@@ -362,6 +377,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.rebuild()
 		return m, tea.Batch(m.collectorDecision(), m.alertCmd(), delay)
 	case stateMsg:
+		m.stateInFlight = false
 		m.activity = msg.activity
 		if msg.err != nil {
 			m.stateErr = cleanText(msg.err.Error(), 200)
