@@ -620,25 +620,10 @@ func (m *Model) View() string {
 		selectedIndex := 0
 		rows := m.visible()
 		byHost := map[string][]visibleNode{}
-		parents := map[string]string{}
-		var parentNames func(*Node)
-		parentNames = func(n *Node) {
-			for _, c := range n.Children {
-				parents[c.ID] = n.Name
-				parentNames(c)
-			}
-		}
-		for _, h := range m.tree {
-			for _, n := range h.Nodes {
-				parentNames(n)
-			}
-		}
-		labels := map[string]string{}
+		labels := sessionLabels(m.tree, m.collapsed, m.showAll)
 		var measure []string
 		for _, v := range rows {
-			label := sessionText(v.node, parents[v.node.ID], v.depth, m.collapsed[v.node.ID])
-			labels[v.node.ID] = label
-			measure = append(measure, label)
+			measure = append(measure, labels[v.node.ID])
 			byHost[v.host] = append(byHost[v.host], v)
 		}
 		table := newTreeTable(width, measure)

@@ -150,7 +150,7 @@ func TestRenderPeerActivity(t *testing.T) {
 	r, s, now := fixture(t)
 	s.Sessions["master@macbook"] = Record{Status: "old", UpdatedAt: now.Add(-time.Hour)}
 	got := Render(r, s, now, false)
-	if !strings.Contains(got, "◐ ▾ openclaw-peer") || !strings.Contains(got, "●   └ developer-bus") {
+	if !strings.Contains(got, "◐ ▾ openclaw-peer") || !strings.Contains(got, "●   ├ developer-bus") {
 		t.Fatal(got)
 	}
 	r.Local.Sessions[2].Running = false

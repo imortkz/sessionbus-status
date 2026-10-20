@@ -815,3 +815,28 @@ func TestEnglishUIAndIdleRows(t *testing.T) {
 		t.Fatal(n.bodies)
 	}
 }
+
+func TestSiblingTreeConnectors(t *testing.T) {
+	m, _, _, now := testModel(t)
+	r := Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{
+		{SessionID: "p", Name: "peer", Kind: "peer"},
+		{SessionID: "a", Name: "alpha", Owner: "p", Kind: "lane"},
+		{SessionID: "b", Name: "beta", Owner: "p", Kind: "lane"},
+		{SessionID: "c", Name: "gamma", Owner: "p", Kind: "lane"},
+		{SessionID: "n", Name: "nested", Owner: "a", Kind: "lane"},
+	}}}
+	m.Update(rosterMsg{report: r})
+	for _, got := range []string{stripANSI(m.View()), Render(r, State{}, now, false)} {
+		for _, want := range []string{"├ ▾ alpha", "│ └ nested", "├ beta", "└ gamma"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("missing %q:\n%s", want, got)
+			}
+		}
+	}
+	press(m, "down")
+	press(m, "left")
+	v := stripANSI(m.View())
+	if !strings.Contains(v, "├ ▸ alpha") || strings.Contains(v, "nested") || !strings.Contains(v, "├ beta") {
+		t.Fatal(v)
+	}
+}

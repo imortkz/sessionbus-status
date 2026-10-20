@@ -91,26 +91,15 @@ func Render(report Report, state State, now time.Time, color bool) string {
 	if report.Error != "" {
 		out.WriteString(uiReportError + sanitize(report.Error) + "\n")
 	}
-	var labels []string
-	var measure func(*Node, string, int)
-	measure = func(n *Node, parent string, depth int) {
-		if n.HiddenDuplicate {
-			return
-		}
-		labels = append(labels, sessionText(n, parent, depth, false))
-		for _, c := range n.Children {
-			measure(c, n.Name, depth+1)
-		}
+	labels := sessionLabels(trees, nil, false)
+	var measure []string
+	for _, label := range labels {
+		measure = append(measure, label)
 	}
-	for _, h := range trees {
-		for _, n := range h.Nodes {
-			measure(n, "", 0)
-		}
-	}
-	table := newTreeTable(100, labels)
+	table := newTreeTable(100, measure)
 	out.WriteString(table.header() + "\n")
 	for _, host := range trees {
-		renderHost(&out, host, color, table)
+		renderHost(&out, host, color, table, labels)
 	}
 	return out.String()
 }
@@ -147,21 +136,59 @@ func shortModel(n *Node) string {
 	}
 	return strings.TrimPrefix(model, "claude-")
 }
-func sessionText(n *Node, parent string, depth int, collapsed bool) string {
-	name := n.Display
-	if parent != "" {
-		name = strings.TrimPrefix(name, parent+"/")
-	}
-	branch := ""
-	if len(n.Children) > 0 {
-		branch = "▾ "
-		if collapsed {
-			branch = "▸ "
+
+// Session labels share sibling and ancestor connectors across both renderers.
+func sessionLabels(trees []HostTree, collapsed map[string]bool, showAll bool) map[string]string {
+	labels := map[string]string{}
+	visible := func(nodes []*Node) []*Node {
+		var out []*Node
+		for _, n := range nodes {
+			if showAll || !n.HiddenDuplicate {
+				out = append(out, n)
+			}
 		}
-	} else if depth > 0 {
-		branch = "└ "
+		return out
 	}
-	return strings.Repeat("  ", depth) + branch + name
+	var walk func(*Node, string, string, string, bool)
+	walk = func(n *Node, parent, prefix, branch string, last bool) {
+		name := n.Display
+		if parent != "" {
+			name = strings.TrimPrefix(name, parent+"/")
+		}
+		children := visible(n.Children)
+		arrow := ""
+		if len(children) > 0 {
+			arrow = "▾ "
+			if collapsed[n.ID] {
+				arrow = "▸ "
+			}
+		}
+		labels[n.ID] = prefix + branch + arrow + name
+		if collapsed[n.ID] {
+			return
+		}
+		childPrefix := "  "
+		if branch != "" {
+			childPrefix = prefix + "│ "
+			if last {
+				childPrefix = prefix + "  "
+			}
+		}
+		for i, c := range children {
+			b := "├ "
+			isLast := i == len(children)-1
+			if isLast {
+				b = "└ "
+			}
+			walk(c, n.Name, childPrefix, b, isLast)
+		}
+	}
+	for _, h := range trees {
+		for _, n := range visible(h.Nodes) {
+			walk(n, "", "", "", true)
+		}
+	}
+	return labels
 }
 func (t treeTable) row(n *Node, label string) string {
 	status := n.Line
@@ -170,7 +197,7 @@ func (t treeTable) row(n *Node, label string) string {
 	}
 	return tableCell(n.Icon(), 1) + " " + tableCell(label, t.session) + " " + tableCell(status, t.status) + " " + tableCell(n.Age, 4) + " " + tableCell(shortModel(n), 14) + " " + tableCell(n.Harness, 7)
 }
-func renderHost(out *strings.Builder, host HostTree, color bool, table treeTable) {
+func renderHost(out *strings.Builder, host HostTree, color bool, table treeTable, labels map[string]string) {
 	if !host.Local || host.Error != "" {
 		line := "── " + host.Host
 		if host.Error != "" {
@@ -181,12 +208,12 @@ func renderHost(out *strings.Builder, host HostTree, color bool, table treeTable
 	if host.Error != "" {
 		return
 	}
-	var draw func(*Node, string, int)
-	draw = func(n *Node, parent string, depth int) {
+	var draw func(*Node)
+	draw = func(n *Node) {
 		if n.HiddenDuplicate {
 			return
 		}
-		line := table.row(n, sessionText(n, parent, depth, false))
+		line := table.row(n, labels[n.ID])
 		if color {
 			if n.Ask {
 				line = "\x1b[31m" + line + "\x1b[0m"
@@ -194,11 +221,11 @@ func renderHost(out *strings.Builder, host HostTree, color bool, table treeTable
 		}
 		out.WriteString(strings.TrimRight(line, " ") + "\n")
 		for _, c := range n.Children {
-			draw(c, n.Name, depth+1)
+			draw(c)
 		}
 	}
 	for _, n := range host.Nodes {
-		draw(n, "", 0)
+		draw(n)
 	}
 }
 func age(d time.Duration) string {
