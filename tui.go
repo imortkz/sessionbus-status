@@ -300,7 +300,12 @@ func (m *Model) alertCmd() tea.Cmd {
 				break
 			}
 		}
-		asks = append(asks, AskInfo{ID: id, Display: display, Text: rec.Ask, Since: since})
+		// A tab exists only on this machine; the GUID is re-checked before it reaches a shell.
+		tab := ""
+		if i := strings.LastIndex(id, "@"); i >= 0 && id[i+1:] == m.report.Local.Host && validITermGUID(rec.Tab) {
+			tab = rec.Tab
+		}
+		asks = append(asks, AskInfo{ID: id, Display: display, Text: rec.Ask, Tab: tab, Since: since})
 	}
 	m.alerts.muted = m.muted
 	actions := m.alerts.Tick(m.now(), asks)
