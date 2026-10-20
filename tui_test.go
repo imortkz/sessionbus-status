@@ -342,7 +342,7 @@ func TestPeerActivityRefresh(t *testing.T) {
 	s.Sessions["master@macbook"] = Record{Status: "old", UpdatedAt: now.Add(-time.Hour)}
 	m.Update(stateMsg{state: s})
 	v := stripANSI(m.View())
-	if !strings.Contains(v, "◐ openclaw-peer") || !strings.Contains(v, "◐ работают lanes") {
+	if !strings.Contains(v, "◐ ▾ openclaw-peer") || !strings.Contains(v, "◐ работают lanes") {
 		t.Fatal(v)
 	}
 	// Stat work is deferred until the command runs, then refreshes activity without opening the log pane.
@@ -360,7 +360,7 @@ func TestPeerActivityRefresh(t *testing.T) {
 		t.Fatal(msg.activity)
 	}
 	m.Update(msg)
-	if !strings.Contains(stripANSI(m.View()), "● openclaw-peer") {
+	if !strings.Contains(stripANSI(m.View()), "● ▾ openclaw-peer") {
 		t.Fatal(m.View())
 	}
 	// Missing/old logs fall back to running lanes; no real homes are inspected.
@@ -370,14 +370,14 @@ func TestPeerActivityRefresh(t *testing.T) {
 	msg = m.pollState()().(stateMsg)
 	msg.state = s
 	m.Update(msg)
-	if !strings.Contains(stripANSI(m.View()), "◐ openclaw-peer") {
+	if !strings.Contains(stripANSI(m.View()), "◐ ▾ openclaw-peer") {
 		t.Fatal(m.View())
 	}
 	for i := range r.Local.Sessions {
 		r.Local.Sessions[i].Running = false
 	}
 	m.Update(rosterMsg{report: r})
-	if !strings.Contains(stripANSI(m.View()), "○ openclaw-peer") {
+	if !strings.Contains(stripANSI(m.View()), "○ ▾ openclaw-peer") {
 		t.Fatal(m.View())
 	}
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
@@ -591,5 +591,45 @@ func applyLogCommand(m *Model, cmd tea.Cmd) {
 		}
 	case logMsg:
 		m.Update(msg)
+	}
+}
+
+func TestTableViewGolden(t *testing.T) {
+	for _, width := range []int{100, 60} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			m, _, _, now := testModel(t)
+			r := Report{Complete: true, Local: Host{Host: "local", Sessions: []Row{
+				{SessionID: "parent", Name: "project", Kind: "peer", Product: "claude-peer"},
+				{SessionID: "child", Name: "project/developer", Kind: "lane", Owner: "parent", Product: "sessionbus-dsh", Running: true},
+			}}}
+			s := State{Sessions: map[string]Record{"parent": {Status: strings.Repeat("busy ", 20), Model: "claude-opus-5-5", UpdatedAt: now.Add(-time.Minute)}, "child": {Status: strings.Repeat("tests ", 20), Model: "provider/glm-5.3", UpdatedAt: now.Add(-5 * time.Second)}}}
+			m.Update(tea.WindowSizeMsg{Width: width, Height: 20})
+			m.Update(stateMsg{state: s})
+			m.Update(rosterMsg{report: r})
+			got := stripANSI(m.View()) + "\n"
+			for _, want := range []string{"СЕССИЯ", "СТАТУС", "МОДЕЛЬ", "ХАРНЕСС", "developer", "opus-5-5", "glm-5.3", "…"} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("missing %q:\n%s", want, got)
+				}
+			}
+			for _, bad := range []string{"project/developer", "claude-opus", "provider/"} {
+				if strings.Contains(got, bad) {
+					t.Fatalf("unshortened %q", bad)
+				}
+			}
+			p := fmt.Sprintf("testdata/table-%d.golden", width)
+			if os.Getenv("UPDATE_GOLDEN") == "1" {
+				if err := os.WriteFile(p, []byte(got), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want, err := os.ReadFile(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != string(want) {
+				t.Fatalf("golden mismatch:\n%s", got)
+			}
+		})
 	}
 }

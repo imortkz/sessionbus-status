@@ -584,35 +584,41 @@ func (m *Model) View() string {
 		selectedIndex := 0
 		rows := m.visible()
 		byHost := map[string][]visibleNode{}
+		parents := map[string]string{}
+		var parentNames func(*Node)
+		parentNames = func(n *Node) {
+			for _, c := range n.Children {
+				parents[c.ID] = n.Name
+				parentNames(c)
+			}
+		}
+		for _, h := range m.tree {
+			for _, n := range h.Nodes {
+				parentNames(n)
+			}
+		}
+		labels := map[string]string{}
+		var measure []string
 		for _, v := range rows {
+			label := sessionText(v.node, parents[v.node.ID], v.depth, m.collapsed[v.node.ID])
+			labels[v.node.ID] = label
+			measure = append(measure, label)
 			byHost[v.host] = append(byHost[v.host], v)
 		}
+		table := newTreeTable(width, measure)
+		body = append(body, table.header())
+		treeHeight--
 		for _, h := range m.tree {
 			if !h.Local || h.Error != "" {
 				line := "── " + h.Host
 				if h.Error != "" {
 					line += ": недоступен (" + h.Error + ")"
 				}
-				lines = append(lines, line)
+				lines = append(lines, clipLine(line+" "+strings.Repeat("─", width), width))
 			}
 			for _, v := range byHost[h.Host] {
 				n := v.node
-				mark := n.Icon()
-				branch := "  "
-				if len(n.Children) > 0 {
-					branch = "▾ "
-					if m.collapsed[n.ID] {
-						branch = "▸ "
-					}
-				} else if v.depth > 0 {
-					branch = "└ "
-				}
-				harness := n.Harness
-				if n.Model != "" {
-					harness += " · " + n.Model
-				}
-				line := strings.Repeat("  ", v.depth) + branch + mark + " " + n.Display + "    " + harness + "    " + n.Line + "  " + n.Age
-				line = clipLine(line, width)
+				line := table.row(n, labels[n.ID])
 				if n.Ask {
 					line = "\x1b[31m" + line + "\x1b[0m"
 				} else if n.Stale {

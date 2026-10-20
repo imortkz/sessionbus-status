@@ -29,23 +29,19 @@ func fixture(t *testing.T) (Report, State, time.Time) {
 }
 func TestRenderGolden(t *testing.T) {
 	report, state, now := fixture(t)
-	want := `bus-status · 14:32:05 · macbook    ⚠ 1 ждёт тебя
-
-⚠ openclaw-peer@macbook    claude · claude-opus-5-5
-  │  ЖДЁТ: одобрить PLAN bus-status  3m
-  ├─ ● developer-bus-status@macbook    codex · gpt-6.1-sol
-  │    волна 1: пишу сборщик  45s
-  └─ ○ researcher-bus-status@macbook    claude · claude-sonnet-5-5
-       нет статуса
-● orphan@macbook    dsh
-     нет статуса
-── office: недоступен (offline)
-`
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		os.WriteFile("testdata/text-table.golden", []byte(Render(report, state, now, false)), 0600)
+	}
+	data, err := os.ReadFile("testdata/text-table.golden")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := string(data)
 	if got := Render(report, state, now, false); got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
 	colored := Render(report, state, now, true)
-	if strings.Count(colored, "\x1b[31m") != 2 || strings.Count(colored, "\x1b[0m") != 2 {
+	if strings.Count(colored, "\x1b[31m") != 1 || strings.Count(colored, "\x1b[0m") != 1 {
 		t.Fatalf("red node lines: %q", colored)
 	}
 }
@@ -55,7 +51,7 @@ func TestRenderOrphansHostsAndErrors(t *testing.T) {
 	report.Error = "partial"
 	report.Remote = append(report.Remote, Host{Host: "remote", Sessions: []Row{{SessionID: "remote-a", Product: "codex-peer"}}})
 	got := Render(report, state, now, false)
-	for _, want := range []string{"\n● orphan@macbook", "── office: недоступен (offline)", "── remote\n○ codex · remote-a", "федерация неполная", "partial"} {
+	for _, want := range []string{"\n● orphan@macbook", "── office: недоступен (offline)", "── remote", "○ codex · remote-a", "федерация неполная", "partial"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in %s", want, got)
 		}
@@ -69,7 +65,7 @@ func TestRenderOrphansHostsAndErrors(t *testing.T) {
 	state.Sessions["master@macbook"] = Record{}
 	state.Sessions["grandchild"] = Record{Ask: "question"}
 	got = Render(report, state, now, false)
-	if strings.Index(got, "openclaw-peer") > strings.Index(got, "orphan@macbook") || strings.Index(got, "researcher-bus") > strings.Index(got, "developer-bus") || !strings.Contains(got, "⚠ codex · grandchi") {
+	if strings.Index(got, "openclaw-peer") > strings.Index(got, "orphan@macbook") || strings.Index(got, "researcher-bus") > strings.Index(got, "developer-bus") || !strings.Contains(got, "codex · grandchi") {
 		t.Fatal(got)
 	}
 }
@@ -154,12 +150,12 @@ func TestRenderPeerActivity(t *testing.T) {
 	r, s, now := fixture(t)
 	s.Sessions["master@macbook"] = Record{Status: "old", UpdatedAt: now.Add(-time.Hour)}
 	got := Render(r, s, now, false)
-	if !strings.Contains(got, "◐ openclaw-peer") || !strings.Contains(got, "● developer-bus") {
+	if !strings.Contains(got, "◐ ▾ openclaw-peer") || !strings.Contains(got, "●   └ developer-bus") {
 		t.Fatal(got)
 	}
 	r.Local.Sessions[2].Running = false
 	got = Render(r, s, now, false)
-	if !strings.Contains(got, "○ openclaw-peer") {
+	if !strings.Contains(got, "○ ▾ openclaw-peer") {
 		t.Fatal(got)
 	}
 }

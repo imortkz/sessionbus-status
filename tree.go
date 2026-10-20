@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/charmbracelet/lipgloss"
 	"strings"
 	"time"
 )
@@ -85,66 +86,107 @@ func Render(report Report, state State, now time.Time, color bool) string {
 	if report.Error != "" {
 		out.WriteString("Ошибка: " + sanitize(report.Error) + "\n")
 	}
-	for _, host := range BuildTree(report, state, now, nil) {
-		renderHost(&out, host, color)
+	trees := BuildTree(report, state, now, nil)
+	var labels []string
+	var measure func(*Node, string, int)
+	measure = func(n *Node, parent string, depth int) {
+		labels = append(labels, sessionText(n, parent, depth, false))
+		for _, c := range n.Children {
+			measure(c, n.Name, depth+1)
+		}
+	}
+	for _, h := range trees {
+		for _, n := range h.Nodes {
+			measure(n, "", 0)
+		}
+	}
+	table := newTreeTable(100, labels)
+	out.WriteString(table.header() + "\n")
+	for _, host := range trees {
+		renderHost(&out, host, color, table)
 	}
 	return out.String()
 }
-func renderHost(out *strings.Builder, host HostTree, color bool) {
+
+type treeTable struct{ width, session, status int }
+
+func newTreeTable(width int, labels []string) treeTable {
+	session := 6
+	for _, s := range labels {
+		session = max(session, lipgloss.Width(s))
+	}
+	session = min(32, session, max(6, width-32))
+	return treeTable{width, session, max(1, width-session-31)}
+}
+func tableCell(s string, width int) string {
+	if lipgloss.Width(s) > width {
+		if width <= 1 {
+			s = "…"
+		} else {
+			s = clipLine(s, width-1) + "…"
+		}
+	}
+	return s + strings.Repeat(" ", max(0, width-lipgloss.Width(s)))
+}
+func (t treeTable) header() string {
+	return "  " + tableCell("СЕССИЯ", t.session) + " " + tableCell("СТАТУС", t.status) + " " + tableCell("⏱", 4) + " " + tableCell("МОДЕЛЬ", 14) + " " + tableCell("ХАРНЕСС", 7)
+}
+func shortModel(n *Node) string {
+	model := n.Model
+	if n.Harness == "dsh" {
+		if _, short, ok := strings.Cut(model, "/"); ok {
+			model = short
+		}
+	}
+	return strings.TrimPrefix(model, "claude-")
+}
+func sessionText(n *Node, parent string, depth int, collapsed bool) string {
+	name := n.Display
+	if parent != "" {
+		name = strings.TrimPrefix(name, parent+"/")
+	}
+	branch := ""
+	if len(n.Children) > 0 {
+		branch = "▾ "
+		if collapsed {
+			branch = "▸ "
+		}
+	} else if depth > 0 {
+		branch = "└ "
+	}
+	return strings.Repeat("  ", depth) + branch + name
+}
+func (t treeTable) row(n *Node, label string) string {
+	return tableCell(n.Icon(), 1) + " " + tableCell(label, t.session) + " " + tableCell(n.Line, t.status) + " " + tableCell(n.Age, 4) + " " + tableCell(shortModel(n), 14) + " " + tableCell(n.Harness, 7)
+}
+func renderHost(out *strings.Builder, host HostTree, color bool, table treeTable) {
+	if !host.Local || host.Error != "" {
+		line := "── " + host.Host
+		if host.Error != "" {
+			line += ": недоступен (" + host.Error + ")"
+		}
+		out.WriteString(clipLine(line+" "+strings.Repeat("─", table.width), table.width) + "\n")
+	}
 	if host.Error != "" {
-		fmt.Fprintf(out, "── %s: недоступен (%s)\n", host.Host, host.Error)
 		return
 	}
-	if !host.Local {
-		fmt.Fprintf(out, "── %s\n", host.Host)
-	}
-	var draw func(*Node, string, string, string)
-	draw = func(n *Node, prefix, branch, continuation string) {
-		icon := n.Icon()
-		harness := n.Harness
-		if n.Model != "" {
-			harness += " · " + n.Model
-		}
-		status := n.Line
-		if n.Age != "" {
-			status += "  " + n.Age
-		}
-		statusPrefix := prefix + continuation + "   "
-		if branch == "" {
-			statusPrefix = "     "
-			if len(n.Children) > 0 {
-				statusPrefix = "  │  "
-			}
-		}
-		line1 := prefix + branch + icon + " " + n.Display + "    " + harness
-		line2 := statusPrefix + status
+	var draw func(*Node, string, int)
+	draw = func(n *Node, parent string, depth int) {
+		line := table.row(n, sessionText(n, parent, depth, false))
 		if color {
-			style := ""
 			if n.Ask {
-				style = "\x1b[31m"
+				line = "\x1b[31m" + line + "\x1b[0m"
 			} else if n.Stale {
-				style = "\x1b[2m"
-			}
-			if style != "" {
-				line1 = style + line1 + "\x1b[0m"
-				line2 = style + line2 + "\x1b[0m"
+				line = "\x1b[2m" + line + "\x1b[0m"
 			}
 		}
-		out.WriteString(line1 + "\n" + line2 + "\n")
-		childPrefix := prefix + continuation
-		if branch == "" {
-			childPrefix = "  "
-		}
-		for i, c := range n.Children {
-			b, k := "├─ ", "│ "
-			if i == len(n.Children)-1 {
-				b, k = "└─ ", "  "
-			}
-			draw(c, childPrefix, b, k)
+		out.WriteString(strings.TrimRight(line, " ") + "\n")
+		for _, c := range n.Children {
+			draw(c, n.Name, depth+1)
 		}
 	}
 	for _, n := range host.Nodes {
-		draw(n, "", "", "")
+		draw(n, "", 0)
 	}
 }
 func age(d time.Duration) string {
