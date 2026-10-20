@@ -557,6 +557,7 @@ func (m *Model) helpLines(width int) []string {
 			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", uiHelpScroll)), key.NewBinding(key.WithKeys("pgup", "pgdown"), key.WithHelp("PgUp/PgDn", uiHelpPage)),
 			key.NewBinding(key.WithKeys("g"), key.WithHelp("g", uiHelpTop)), key.NewBinding(key.WithKeys("G"), key.WithHelp("G", uiHelpTail)),
 			key.NewBinding(key.WithKeys("tab"), key.WithHelp("Tab", uiHelpFocus)), key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", uiHelpBack)),
+			key.NewBinding(key.WithKeys("l"), key.WithHelp("l", uiHelpPane)),
 			key.NewBinding(key.WithKeys("L"), key.WithHelp("L", uiHelpFullLog)), key.NewBinding(key.WithKeys("s"), key.WithHelp("s", uiHelpSound)), key.NewBinding(key.WithKeys("q"), key.WithHelp("q", uiHelpQuit)),
 		}
 	}

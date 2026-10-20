@@ -1118,3 +1118,15 @@ func TestSessionNamesOmitHost(t *testing.T) {
 		}
 	}
 }
+
+func TestLogFocusHelpIncludesPaneToggle(t *testing.T) {
+	m, _, _, _ := testModel(t)
+	press(m, "L")
+	if !strings.Contains(stripANSI(strings.Join(m.helpLines(m.width-2), "\n")), "l "+uiHelpPane) {
+		t.Fatal("log focus help omits working pane toggle")
+	}
+	press(m, "l")
+	if m.pane != "history" || m.focus != "tree" {
+		t.Fatal(m.pane, m.focus)
+	}
+}
