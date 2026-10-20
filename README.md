@@ -27,7 +27,7 @@ sessionbus-status --version
 
 - Sessionbus 0.5.12 or newer with `sessionbus roster --json`.
 - Sound and notifications work on macOS only; this is a stated limitation of the repository. On Linux the TUI runs without them.
-- Optional, macOS: `brew install terminal-notifier`, then allow notifications for terminal-notifier in System Settings → Notifications. Clicking a notification opens the iTerm2 tab of the session that asked, if that session sent `tab:` (local sessions only); otherwise it brings the terminal running the TUI to the front. On the first such click macOS asks to let terminal-notifier control iTerm2 (System Settings → Privacy & Security → Automation → terminal-notifier → iTerm2). Without terminal-notifier (or without that permission) the built-in osascript notification is used, and clicking it opens Script Editor.
+- Optional, macOS: `brew install terminal-notifier`, then allow notifications for terminal-notifier in System Settings → Notifications. Clicking a notification opens the iTerm2 tab of the session that asked, if that session sent `tab:` (local sessions only); otherwise it brings the terminal running the TUI to the front. On the first such click macOS asks to let terminal-notifier control iTerm2 (System Settings → Privacy & Security → Automation → terminal-notifier → iTerm2). If Automation is denied, the click only brings iTerm2 to the front (when the TUI runs in iTerm2) and otherwise does nothing. Without terminal-notifier (or without notification permission for it) the built-in osascript notification is used, and clicking it opens Script Editor.
 
 ## Quick start
 

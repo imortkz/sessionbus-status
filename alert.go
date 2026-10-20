@@ -156,10 +156,14 @@ func (n macNotifier) terminalNotifierArgs(nt Notice) []string {
 		group += ":" + cleanText(nt.ID, 120)
 	}
 	args := []string{"-title", nt.Title, "-message", nt.Body, "-group", group}
-	if cmd := selectITermCommand(nt.Tab); cmd != "" {
-		args = append(args, "-execute", cmd)
-	} else if n.bundle != "" {
+	cmd := selectITermCommand(nt.Tab)
+	// With a tab, -activate only for iTerm2 itself (same app the script raises); another
+	// terminal's -activate would race the script.
+	if n.bundle != "" && (cmd == "" || n.bundle == "com.googlecode.iterm2") {
 		args = append(args, "-activate", n.bundle)
+	}
+	if cmd != "" {
+		args = append(args, "-execute", cmd)
 	}
 	return args
 }

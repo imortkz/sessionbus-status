@@ -194,19 +194,27 @@ const testGUID = "0EB11E86-12BA-4739-B792-1F3699034011"
 
 func TestNotifierTabExecute(t *testing.T) {
 	body := `quote " $(x) ' secret-body`
-	n := macNotifier{notifierPath: "/bin/tn", bundle: "com.googlecode.iterm2"}
-	got := n.terminalNotifierArgs(Notice{Title: "t", Body: body, ID: "s@h", Tab: testGUID})
-	var exec string
-	for i, a := range got {
-		if a == "-activate" {
-			t.Fatalf("-activate with tab: %q", got)
+	argv := func(bundle string) (activate, exec string) {
+		n := macNotifier{notifierPath: "/bin/tn", bundle: bundle}
+		got := n.terminalNotifierArgs(Notice{Title: "t", Body: body, ID: "s@h", Tab: testGUID})
+		for i, a := range got {
+			if a == "-activate" {
+				activate = got[i+1]
+			}
+			if a == "-execute" {
+				exec = got[i+1]
+			}
 		}
-		if a == "-execute" {
-			exec = got[i+1]
-		}
+		return
 	}
-	if !strings.HasPrefix(exec, "/usr/bin/osascript") || !strings.Contains(exec, testGUID) || strings.Contains(exec, "secret-body") {
-		t.Fatalf("execute: %q", exec)
+	// iTerm2 is the same app the script raises: -activate keeps it working when Automation is denied.
+	activate, exec := argv("com.googlecode.iterm2")
+	if activate != "com.googlecode.iterm2" || !strings.HasPrefix(exec, "/usr/bin/osascript") || !strings.Contains(exec, testGUID) || strings.Contains(exec, "secret-body") {
+		t.Fatalf("iterm2: activate=%q execute=%q", activate, exec)
+	}
+	// Another terminal's -activate would race the script (D2).
+	if activate, exec = argv("com.apple.Terminal"); activate != "" || exec == "" {
+		t.Fatalf("other terminal: activate=%q execute=%q", activate, exec)
 	}
 }
 
