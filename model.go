@@ -12,7 +12,17 @@ type HostTree struct {
 	Local bool
 	Nodes []*Node
 }
+type Activity string
+
+const (
+	ActivityAsk   Activity = "ask"
+	ActivityLive  Activity = "live"
+	ActivityLanes Activity = "lanes"
+	ActivityIdle  Activity = "idle"
+)
+
 type Node struct {
+	Activity                          Activity
 	ID, Display, Harness, Model, Line string
 	Ask, Running, Stale               bool
 	Age                               string
@@ -28,7 +38,7 @@ func shortID(id string) string {
 	}
 	return string(r)
 }
-func BuildTree(report Report, state State, now time.Time) []HostTree {
+func BuildTree(report Report, state State, now time.Time, activity map[string]time.Time) []HostTree {
 	var trees []HostTree
 	for hi, host := range append([]Host{report.Local}, report.Remote...) {
 		tree := HostTree{Host: cleanText(host.Host, 120), Error: cleanText(host.Error, 200), Local: hi == 0}
@@ -72,6 +82,22 @@ func BuildTree(report Report, state State, now time.Time) []HostTree {
 			}
 			return false
 		}
+		var runningLaneBelow func(string, map[string]bool) bool
+		runningLaneBelow = func(id string, seen map[string]bool) bool {
+			if seen[id] {
+				return false
+			}
+			seen[id] = true
+			for _, child := range children[id] {
+				if rows[child].Kind != "peer" && rows[child].Running {
+					return true
+				}
+				if runningLaneBelow(child, seen) {
+					return true
+				}
+			}
+			return false
+		}
 		nodes := map[string]*Node{}
 		for id, row := range rows {
 			rec := state.Sessions[id]
@@ -94,9 +120,25 @@ func BuildTree(report Report, state State, now time.Time) []HostTree {
 				line = "нет статуса"
 			}
 			n := &Node{ID: id, Display: display, Harness: h, Model: cleanText(rec.Model, 120), Line: line, Ask: ask, Running: row.Running, HasAskBelow: hasAsk(id, map[string]bool{})}
+			live := row.Running
+			lanes := false
+			if row.Kind == "peer" {
+				at := activity[id]
+				live = tree.Local && !at.IsZero() && !at.After(now) && now.Sub(at) <= 30*time.Second
+				lanes = runningLaneBelow(id, map[string]bool{})
+			}
+			n.Activity = ActivityIdle
+			switch {
+			case ask:
+				n.Activity = ActivityAsk
+			case live:
+				n.Activity = ActivityLive
+			case lanes:
+				n.Activity = ActivityLanes
+			}
 			if !rec.UpdatedAt.IsZero() {
 				n.Age = age(now.Sub(rec.UpdatedAt))
-				n.Stale = !row.Running && now.Sub(rec.UpdatedAt) > 10*time.Minute
+				n.Stale = !live && !lanes && now.Sub(rec.UpdatedAt) > 10*time.Minute
 			}
 			nodes[id] = n
 		}
@@ -146,4 +188,17 @@ func BuildTree(report Report, state State, now time.Time) []HostTree {
 		trees = append(trees, tree)
 	}
 	return trees
+}
+
+func (n *Node) Icon() string {
+	switch n.Activity {
+	case ActivityAsk:
+		return "⚠"
+	case ActivityLive:
+		return "●"
+	case ActivityLanes:
+		return "◐"
+	default:
+		return "○"
+	}
 }

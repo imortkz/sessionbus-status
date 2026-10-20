@@ -273,3 +273,21 @@ func parseLog(kind string, b []byte) []LogLine {
 	}
 	return out
 }
+
+// LogActive returns the log modification time when it falls within the activity window.
+// A missing or unreadable log returns an error; an older log returns a zero time.
+func LogActive(home, id, product string, now time.Time, window time.Duration) (time.Time, error) {
+	p, _, err := LocateLog(home, id, product)
+	if err != nil {
+		return time.Time{}, err
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		return time.Time{}, err
+	}
+	at := info.ModTime()
+	if at.After(now) || now.Sub(at) > window {
+		return time.Time{}, nil
+	}
+	return at, nil
+}

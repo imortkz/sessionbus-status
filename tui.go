@@ -26,8 +26,9 @@ type rosterMsg struct {
 	err    error
 }
 type stateMsg struct {
-	state State
-	err   error
+	activity map[string]time.Time
+	state    State
+	err      error
 }
 type rosterTick struct{}
 type clockTick struct{}
@@ -51,6 +52,7 @@ type Model struct {
 	report                         Report
 	state                          State
 	tree                           []HostTree
+	activity                       map[string]time.Time
 	selected                       string
 	collapsed                      map[string]bool
 	pane                           string
@@ -135,8 +137,24 @@ func (m *Model) pollRoster() tea.Cmd {
 	}
 }
 func (m *Model) pollState() tea.Cmd {
-	p := m.config.statePath
-	return func() tea.Msg { s, err := loadState(p); return stateMsg{state: s, err: err} }
+	p, home := m.config.statePath, m.config.home
+	rows := append([]Row(nil), m.report.Local.Sessions...)
+	now := m.now
+	return func() tea.Msg {
+		s, err := loadState(p)
+		activity := map[string]time.Time{}
+		at := now()
+		for _, row := range rows {
+			if row.Kind != "peer" || row.Product == "bus-status" {
+				continue
+			}
+			id, _, _ := strings.Cut(row.SessionID, "@")
+			if stamp, statErr := LogActive(home, id, row.Product, at, 30*time.Second); statErr == nil && !stamp.IsZero() {
+				activity[row.SessionID] = stamp
+			}
+		}
+		return stateMsg{state: s, err: err, activity: activity}
+	}
 }
 func (m *Model) visible() []visibleNode {
 	var rows []visibleNode
@@ -172,7 +190,7 @@ func (m *Model) selectID(id string) {
 	m.viewport.SetContent("")
 }
 func (m *Model) rebuild() {
-	m.tree = BuildTree(m.report, m.state, m.now())
+	m.tree = BuildTree(m.report, m.state, m.now(), m.activity)
 	rows := m.visible()
 	for _, v := range rows {
 		if v.node.ID == m.selected {
@@ -296,8 +314,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.rebuild()
 		return m, tea.Batch(m.collectorDecision(), m.alertCmd(), delay)
 	case stateMsg:
+		m.activity = msg.activity
 		if msg.err != nil {
 			m.stateErr = cleanText(msg.err.Error(), 200)
+			m.rebuild()
 			return m, nil
 		}
 		m.state = msg.state
@@ -378,8 +398,12 @@ func (m *Model) helpLines(width int) []string {
 	h.Width = 0
 	var lines []string
 	line := ""
+	var pieces []string
 	for _, b := range m.keys {
-		piece := h.ShortHelpView([]key.Binding{b})
+		pieces = append(pieces, h.ShortHelpView([]key.Binding{b}))
+	}
+	pieces = append(pieces, "◐ работают lanes")
+	for _, piece := range pieces {
 		if line != "" && lipgloss.Width(line+"  "+piece) > width {
 			lines = append(lines, line)
 			line = ""
@@ -494,13 +518,7 @@ func (m *Model) View() string {
 			}
 			for _, v := range byHost[h.Host] {
 				n := v.node
-				mark := "○"
-				if n.Running {
-					mark = "●"
-				}
-				if n.Ask {
-					mark = "⚠"
-				}
+				mark := n.Icon()
 				branch := "  "
 				if len(n.Children) > 0 {
 					branch = "▾ "

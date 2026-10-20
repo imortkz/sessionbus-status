@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func putLog(t *testing.T, p string, b []byte) {
@@ -129,5 +130,32 @@ func TestParseLimits(t *testing.T) {
 		if got := logLine(tt.kind, strings.Repeat("я", 400), ""); len([]rune(got.Text)) != tt.limit {
 			t.Fatal(tt, got)
 		}
+	}
+}
+
+func TestLogActive(t *testing.T) {
+	home := t.TempDir()
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	p := filepath.Join(home, ".claude/projects/p/active.jsonl")
+	putLog(t, p, nil)
+	for _, age := range []time.Duration{0, 30 * time.Second, 31 * time.Second} {
+		at := now.Add(-age)
+		if err := os.Chtimes(p, at, at); err != nil {
+			t.Fatal(err)
+		}
+		got, err := LogActive(home, "active", "claude-peer", now, 30*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if age <= 30*time.Second {
+			if !got.Equal(at) {
+				t.Fatal(got, at)
+			}
+		} else if !got.IsZero() {
+			t.Fatal("old log active", got)
+		}
+	}
+	if _, err := LogActive(home, "missing", "unknown", now, 30*time.Second); err == nil {
+		t.Fatal("missing log accepted")
 	}
 }

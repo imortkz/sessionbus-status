@@ -337,3 +337,52 @@ func TestLocalLogCommand(t *testing.T) {
 		t.Fatal(m.logErr, m.logLines)
 	}
 }
+
+func TestPeerActivityRefresh(t *testing.T) {
+	m, r, s, now := testModel(t)
+	s.Sessions["master@macbook"] = Record{Status: "old", UpdatedAt: now.Add(-time.Hour)}
+	m.Update(stateMsg{state: s})
+	v := stripANSI(m.View())
+	if !strings.Contains(v, "◐ openclaw-peer") || !strings.Contains(v, "◐ работают lanes") {
+		t.Fatal(v)
+	}
+	// Stat work is deferred until the command runs, then refreshes activity without opening the log pane.
+	m.report = r
+	m.config.home = t.TempDir()
+	p := filepath.Join(m.config.home, ".claude/projects/p/master.jsonl")
+	cmd := m.pollState()
+	putLog(t, p, nil)
+	if err := os.Chtimes(p, now, now); err != nil {
+		t.Fatal(err)
+	}
+	msg := cmd().(stateMsg)
+	msg.state = s
+	if !msg.activity["master@macbook"].Equal(now) {
+		t.Fatal(msg.activity)
+	}
+	m.Update(msg)
+	if !strings.Contains(stripANSI(m.View()), "● openclaw-peer") {
+		t.Fatal(m.View())
+	}
+	// Missing/old logs fall back to running lanes; no real homes are inspected.
+	if err := os.Chtimes(p, now.Add(-time.Minute), now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	msg = m.pollState()().(stateMsg)
+	msg.state = s
+	m.Update(msg)
+	if !strings.Contains(stripANSI(m.View()), "◐ openclaw-peer") {
+		t.Fatal(m.View())
+	}
+	for i := range r.Local.Sessions {
+		r.Local.Sessions[i].Running = false
+	}
+	m.Update(rosterMsg{report: r})
+	if !strings.Contains(stripANSI(m.View()), "○ openclaw-peer") {
+		t.Fatal(m.View())
+	}
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	if !strings.Contains(stripANSI(m.View()), "◐ работают lanes") {
+		t.Fatal(m.View())
+	}
+}

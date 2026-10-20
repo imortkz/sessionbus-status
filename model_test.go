@@ -18,7 +18,7 @@ func TestBuildTree(t *testing.T) {
 		{SessionID: "cycle-b", Owner: "cycle-a", Product: "claude-peer"},
 	}}}
 	s := State{Sessions: map[string]Record{"child": {Ask: "approve"}, "aaaaaaaa-1": {Status: "old", UpdatedAt: now.Add(-11 * time.Minute)}, "bbbbbbbb-2": {Status: "old", UpdatedAt: now.Add(-11 * time.Minute)}}}
-	trees := BuildTree(r, s, now)
+	trees := BuildTree(r, s, now, nil)
 	if len(trees) != 1 || !trees[0].Local {
 		t.Fatal(trees)
 	}
@@ -51,5 +51,50 @@ func TestBuildTree(t *testing.T) {
 	}
 	if len(ids) != 6 || strings.Contains(strings.Join(ids, ","), "hide") {
 		t.Fatal(ids)
+	}
+}
+
+func TestPeerActivity(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	for _, tt := range []struct {
+		name                         string
+		ask, ownRunning, laneRunning bool
+		mtime                        time.Time
+		want                         Activity
+		stale                        bool
+	}{
+		{name: "running descendant", laneRunning: true, want: ActivityLanes},
+		{name: "fresh own log", laneRunning: true, mtime: now.Add(-30 * time.Second), want: ActivityLive},
+		{name: "ask wins", ask: true, laneRunning: true, mtime: now, want: ActivityAsk},
+		{name: "idle lanes", want: ActivityIdle, stale: true},
+		{name: "old log", mtime: now.Add(-31 * time.Second), want: ActivityIdle, stale: true},
+		{name: "peer running ignored", ownRunning: true, want: ActivityIdle, stale: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := Report{Local: Host{Host: "local", Sessions: []Row{
+				{SessionID: "peer", Name: "peer", Kind: "peer", Product: "claude-peer", Running: tt.ownRunning},
+				{SessionID: "child", Name: "child", Kind: "lane", Owner: "peer"},
+				{SessionID: "grandchild", Name: "grandchild", Kind: "lane", Owner: "child", Running: tt.laneRunning},
+			}}}
+			s := State{Sessions: map[string]Record{"peer": {Status: "old", UpdatedAt: now.Add(-time.Hour)}}}
+			if tt.ask {
+				rec := s.Sessions["peer"]
+				rec.Ask = "question"
+				s.Sessions["peer"] = rec
+			}
+			n := BuildTree(r, s, now, map[string]time.Time{"peer": tt.mtime})[0].Nodes[0]
+			if n.Activity != tt.want || n.Stale != tt.stale {
+				t.Fatalf("activity=%s stale=%v", n.Activity, n.Stale)
+			}
+			if tt.laneRunning && n.Children[0].Children[0].Activity != ActivityLive {
+				t.Fatal("lane running rule changed")
+			}
+			r.Remote = []Host{{Host: "remote", Sessions: r.Local.Sessions}}
+			r.Local.Sessions = nil
+			n = BuildTree(r, s, now, map[string]time.Time{"peer": now})[1].Nodes[0]
+			if !tt.ask && !tt.laneRunning && n.Activity != ActivityIdle {
+				t.Fatal("remote mtime used")
+			}
+		})
 	}
 }

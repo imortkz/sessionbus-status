@@ -85,7 +85,7 @@ func Render(report Report, state State, now time.Time, color bool) string {
 	if report.Error != "" {
 		out.WriteString("Ошибка: " + sanitize(report.Error) + "\n")
 	}
-	for _, host := range BuildTree(report, state, now) {
+	for _, host := range BuildTree(report, state, now, nil) {
 		renderHost(&out, host, color)
 	}
 	return out.String()
@@ -100,13 +100,7 @@ func renderHost(out *strings.Builder, host HostTree, color bool) {
 	}
 	var draw func(*Node, string, string, string)
 	draw = func(n *Node, prefix, branch, continuation string) {
-		icon := "○"
-		if n.Running {
-			icon = "●"
-		}
-		if n.Ask {
-			icon = "⚠"
-		}
+		icon := n.Icon()
 		harness := n.Harness
 		if n.Model != "" {
 			harness += " · " + n.Model
