@@ -178,11 +178,14 @@ func TestNotifierTimeoutFallsBack(t *testing.T) {
 	saved := notifierTimeout
 	notifierTimeout = 100 * time.Millisecond
 	defer func() { notifierTimeout = saved }()
-	start := time.Now()
-	if (macNotifier{notifierPath: script}).terminalNotify("sessionbus-status", "question") {
-		t.Fatal("hung terminal-notifier reported success")
-	}
-	if elapsed := time.Since(start); elapsed > 3*time.Second {
-		t.Fatalf("timeout not applied: %v", elapsed)
+	started := make(chan []string, 1)
+	(macNotifier{notifierPath: script, start: func(cmd *exec.Cmd) { started <- cmd.Args }}).Notify("sessionbus-status", "question")
+	select {
+	case args := <-started:
+		if args[0] != "osascript" {
+			t.Fatalf("%q", args)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("hung terminal-notifier did not fall back to osascript")
 	}
 }
