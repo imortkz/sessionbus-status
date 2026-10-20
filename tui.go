@@ -58,6 +58,7 @@ type Model struct {
 	state                          State
 	tree                           []HostTree
 	activity                       map[string]time.Time
+	firstSeen                      map[string]time.Time
 	stateLoaded                    bool
 	stateInFlight                  bool
 	selected                       string
@@ -218,8 +219,21 @@ func (m *Model) selectID(id string) {
 	m.followTail = true
 	m.newLogLines = 0
 }
+func (m *Model) recordFirstSeen() {
+	if m.firstSeen == nil {
+		m.firstSeen = map[string]time.Time{}
+	}
+	now := m.now()
+	for _, host := range append([]Host{m.report.Local}, m.report.Remote...) {
+		for _, row := range host.Sessions {
+			if _, ok := m.firstSeen[row.SessionID]; !ok {
+				m.firstSeen[row.SessionID] = now
+			}
+		}
+	}
+}
 func (m *Model) rebuild() {
-	m.tree = BuildTree(m.report, m.state, m.now(), m.activity)
+	m.tree = BuildTree(m.report, m.state, m.now(), m.activity, m.firstSeen)
 	if m.showAll {
 		applyDisplayNames(m.tree, true)
 	}
@@ -400,6 +414,7 @@ func (m *Model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		}
 		m.report = msg.report
 		m.rosterErr = ""
+		m.recordFirstSeen()
 		m.rebuild()
 		return m, tea.Batch(m.collectorDecision(), m.alertCmd(), delay)
 	case stateMsg:

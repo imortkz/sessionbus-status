@@ -883,7 +883,7 @@ func TestIdleAgeColumn(t *testing.T) {
 			}
 		}
 		table := newTreeTable(100, []string{"lane"})
-		n := BuildTree(r, s, now, nil)[0].Nodes[0]
+		n := BuildTree(r, s, now, nil, nil)[0].Nodes[0]
 		if got := table.row(n, "lane"); !strings.Contains(got, tableCell("status-value", table.status)+" "+tableCell("idle "+age(duration), 8)+" ") {
 			t.Fatal("idle is not in age column", got)
 		}
@@ -901,7 +901,7 @@ func TestVisibleDuplicateSuffixes(t *testing.T) {
 			t.Fatal("hidden twin affects visible display", got)
 		}
 	}
-	n := BuildTree(r, s, now, nil)[0].Nodes[0]
+	n := BuildTree(r, s, now, nil, nil)[0].Nodes[0]
 	if n.Display != "same" {
 		t.Fatal("default tree suffix", n.Display)
 	}

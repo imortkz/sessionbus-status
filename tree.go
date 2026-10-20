@@ -93,7 +93,7 @@ func header(now time.Time, host string, count int, incomplete bool) string {
 }
 func Render(report Report, state State, now time.Time, color bool) string {
 	var out strings.Builder
-	trees := BuildTree(report, state, now, nil)
+	trees := BuildTree(report, state, now, nil, nil)
 	heading := header(now, report.Local.Host, len(askIDs(report, state)), !report.Complete)
 	if count := hiddenDuplicates(trees); count > 0 {
 		heading = strings.TrimSuffix(heading, "\n\n") + " · " + fmt.Sprintf(uiHidden, count) + "\n\n"

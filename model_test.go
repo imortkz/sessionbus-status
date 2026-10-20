@@ -20,7 +20,7 @@ func TestBuildTree(t *testing.T) {
 		{SessionID: "cycle-b", Owner: "cycle-a", Product: "claude-peer"},
 	}}}
 	s := State{Sessions: map[string]Record{"child": {Ask: "approve"}, "aaaaaaaa-1": {Status: "old", UpdatedAt: now.Add(-11 * time.Minute)}, "bbbbbbbb-2": {Status: "old", UpdatedAt: now.Add(-11 * time.Minute)}}}
-	trees := BuildTree(r, s, now, nil)
+	trees := BuildTree(r, s, now, nil, nil)
 	if len(trees) != 1 || !trees[0].Local {
 		t.Fatal(trees)
 	}
@@ -83,7 +83,7 @@ func TestPeerActivity(t *testing.T) {
 				rec.Ask = "question"
 				s.Sessions["peer"] = rec
 			}
-			n := BuildTree(r, s, now, map[string]time.Time{"peer": tt.mtime})[0].Nodes[0]
+			n := BuildTree(r, s, now, map[string]time.Time{"peer": tt.mtime}, nil)[0].Nodes[0]
 			if n.Activity != tt.want || n.Age != "1h" {
 				t.Fatalf("activity=%s age=%s", n.Activity, n.Age)
 			}
@@ -92,7 +92,7 @@ func TestPeerActivity(t *testing.T) {
 			}
 			r.Remote = []Host{{Host: "remote", Sessions: r.Local.Sessions}}
 			r.Local.Sessions = nil
-			n = BuildTree(r, s, now, map[string]time.Time{"peer": now})[1].Nodes[0]
+			n = BuildTree(r, s, now, map[string]time.Time{"peer": now}, nil)[1].Nodes[0]
 			if !tt.ask && !tt.laneRunning && n.Activity != ActivityIdle {
 				t.Fatal("remote mtime used")
 			}
@@ -104,7 +104,7 @@ func TestHiddenDuplicatePeers(t *testing.T) {
 	now := time.Now()
 	r := Report{Local: Host{Host: "local", Sessions: []Row{{SessionID: "old", Name: "same", Kind: "peer"}, {SessionID: "new", Name: "same", Kind: "peer"}}}}
 	s := State{Sessions: map[string]Record{"old": {Status: "old", UpdatedAt: now.Add(-time.Hour)}, "new": {Status: "new", UpdatedAt: now}}}
-	nodes := BuildTree(r, s, now, nil)[0].Nodes
+	nodes := BuildTree(r, s, now, nil, nil)[0].Nodes
 	byID := map[string]*Node{}
 	for _, n := range nodes {
 		byID[n.ID] = n
@@ -131,7 +131,7 @@ func TestHiddenDuplicatePeers(t *testing.T) {
 			case "lanes":
 				copyReport.Local.Sessions = append(copyReport.Local.Sessions, Row{SessionID: "child", Owner: "old", Kind: "lane", Running: true})
 			}
-			for _, n := range BuildTree(copyReport, copyState, now, mtime)[0].Nodes {
+			for _, n := range BuildTree(copyReport, copyState, now, mtime, nil)[0].Nodes {
 				if n.ID == "old" && n.HiddenDuplicate {
 					t.Fatal("active duplicate hidden", activity)
 				}
@@ -139,7 +139,7 @@ func TestHiddenDuplicatePeers(t *testing.T) {
 		})
 	}
 	r.Remote = []Host{{Host: "remote", Sessions: []Row{{SessionID: "remote", Name: "same", Kind: "peer"}}}}
-	if BuildTree(r, s, now, nil)[1].Nodes[0].HiddenDuplicate {
+	if BuildTree(r, s, now, nil, nil)[1].Nodes[0].HiddenDuplicate {
 		t.Fatal("cross-host duplicate hidden")
 	}
 }
@@ -147,5 +147,68 @@ func TestHiddenDuplicatePeers(t *testing.T) {
 func TestNodeHasNoStaleFlag(t *testing.T) {
 	if _, exists := reflect.TypeOf(Node{}).FieldByName("Stale"); exists {
 		t.Fatal("dead Stale field remains")
+	}
+}
+
+func hiddenByID(t *testing.T, r Report, s State, now time.Time, firstSeen map[string]time.Time) map[string]bool {
+	t.Helper()
+	out := map[string]bool{}
+	for _, n := range BuildTree(r, s, now, nil, firstSeen)[0].Nodes {
+		out[n.ID] = n.HiddenDuplicate
+	}
+	return out
+}
+
+func TestHideOlderTwinFirstSeen(t *testing.T) {
+	now := time.Now()
+	r := Report{Local: Host{Host: "local", Sessions: []Row{
+		{SessionID: "old", Name: "same", Kind: "peer", Connected: true},
+		{SessionID: "new", Name: "same", Kind: "peer", Connected: true},
+	}}}
+	s := State{Sessions: map[string]Record{"old": {Status: "working", UpdatedAt: now.Add(-time.Hour)}}}
+	got := hiddenByID(t, r, s, now, map[string]time.Time{"old": now.Add(-time.Hour), "new": now.Add(-time.Minute)})
+	if !got["old"] || got["new"] {
+		t.Fatalf("newer silent twin must replace older one with status: %v", got)
+	}
+	got = hiddenByID(t, r, s, now, map[string]time.Time{"old": now, "new": now})
+	if got["old"] || !got["new"] {
+		t.Fatalf("equal first-seen must use the status rule: %v", got)
+	}
+	got = hiddenByID(t, r, s, now, nil)
+	if got["old"] || !got["new"] {
+		t.Fatalf("nil first-seen must use the status rule: %v", got)
+	}
+}
+
+func TestHideOlderTwinDisconnected(t *testing.T) {
+	now := time.Now()
+	r := Report{Local: Host{Host: "local", Sessions: []Row{
+		{SessionID: "old", Name: "same", Kind: "peer"},
+		{SessionID: "new", Name: "same", Kind: "peer", Connected: true},
+	}}}
+	s := State{Sessions: map[string]Record{"old": {Status: "working", UpdatedAt: now}}}
+	got := hiddenByID(t, r, s, now, nil)
+	if !got["old"] || got["new"] {
+		t.Fatalf("disconnected idle twin must be hidden: %v", got)
+	}
+}
+
+func TestHideOlderTwinKeepsActive(t *testing.T) {
+	now := time.Now()
+	firstSeen := map[string]time.Time{"old": now.Add(-time.Hour), "new": now}
+	base := func() Report {
+		return Report{Local: Host{Host: "local", Sessions: []Row{
+			{SessionID: "old", Name: "same", Kind: "peer", Connected: true},
+			{SessionID: "new", Name: "same", Kind: "peer", Connected: true},
+		}}}
+	}
+	ask := State{Sessions: map[string]Record{"old": {Ask: "q", UpdatedAt: now}}}
+	if hiddenByID(t, base(), ask, now, firstSeen)["old"] {
+		t.Fatal("asking peer hidden")
+	}
+	withLane := base()
+	withLane.Local.Sessions = append(withLane.Local.Sessions, Row{SessionID: "child", Owner: "old", Kind: "lane", Running: true})
+	if hiddenByID(t, withLane, State{}, now, firstSeen)["old"] {
+		t.Fatal("peer with lanes hidden")
 	}
 }

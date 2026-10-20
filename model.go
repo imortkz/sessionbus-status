@@ -42,7 +42,7 @@ func shortID(id string) string {
 	}
 	return string(r)
 }
-func BuildTree(report Report, state State, now time.Time, activity map[string]time.Time) []HostTree {
+func BuildTree(report Report, state State, now time.Time, activity, firstSeen map[string]time.Time) []HostTree {
 	var trees []HostTree
 	for hi, host := range append([]Host{report.Local}, report.Remote...) {
 		tree := HostTree{Host: cleanText(host.Host, 120), Error: cleanText(host.Error, 200), Local: hi == 0}
@@ -148,6 +148,22 @@ func BuildTree(report Report, state State, now time.Time, activity map[string]ti
 			for otherID, other := range nodes {
 				if otherID == id || n.Name != other.Name {
 					continue
+				}
+				if rows[id].Connected != rows[otherID].Connected {
+					if !rows[id].Connected {
+						n.HiddenDuplicate = true
+						break
+					}
+					continue
+				}
+				if a, aok := firstSeen[id]; aok {
+					if b, bok := firstSeen[otherID]; bok && !a.Equal(b) {
+						if a.Before(b) {
+							n.HiddenDuplicate = true
+							break
+						}
+						continue
+					}
 				}
 				otherRec := state.Sessions[otherID]
 				otherAbsent := otherRec.Status == "" || otherRec.UpdatedAt.IsZero()
