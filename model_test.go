@@ -236,3 +236,18 @@ func TestSelfNameDisplay(t *testing.T) {
 		t.Fatalf("unexpected in\n%s", got)
 	}
 }
+
+func TestSelfNameDisambiguatedFromHostSuffixedRosterName(t *testing.T) {
+	report, state, now := fixture(t)
+	report.Remote = []Host{{Host: "srv", Sessions: []Row{
+		{SessionID: "aaaaaaaa-1@srv", Product: "claude-peer", Kind: "peer", Name: "twin@srv"},
+		{SessionID: "bbbbbbbb-2@srv", Product: "claude-peer", Kind: "peer"},
+	}}}
+	state.Sessions["bbbbbbbb-2@srv"] = Record{Name: "twin"}
+	got := Render(report, state, now, false)
+	for _, want := range []string{"twin · aaaaaaaa", "twin · bbbbbbbb"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in\n%s", want, got)
+		}
+	}
+}

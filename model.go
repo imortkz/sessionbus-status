@@ -42,6 +42,15 @@ func (n *Node) baseName() string {
 	return n.SelfName
 }
 
+// countKey is the name as rendered: sessionDisplayName strips the row's own
+// host suffix from roster names, so duplicates are counted after the same strip.
+func (n *Node) countKey(host string) string {
+	if n.Name != "" && host != "" {
+		return strings.TrimSuffix(n.Name, "@"+host)
+	}
+	return n.baseName()
+}
+
 func shortID(id string) string {
 	id, _, _ = strings.Cut(id, "@")
 	r := []rune(cleanText(id, 0))
@@ -276,8 +285,8 @@ func applyDisplayNames(trees []HostTree, showAll bool) {
 		var collect func(*Node)
 		collect = func(n *Node) {
 			nodes = append(nodes, n)
-			if base := n.baseName(); base != "" && (showAll || !n.HiddenDuplicate) {
-				counts[base]++
+			if key := n.countKey(h.Host); key != "" && (showAll || !n.HiddenDuplicate) {
+				counts[key]++
 			}
 			for _, c := range n.Children {
 				collect(c)
@@ -290,7 +299,7 @@ func applyDisplayNames(trees []HostTree, showAll bool) {
 			n.Display = n.baseName()
 			if n.Display == "" {
 				n.Display = n.Harness + " · " + shortID(n.ID)
-			} else if (showAll || !n.HiddenDuplicate) && counts[n.Display] > 1 {
+			} else if (showAll || !n.HiddenDuplicate) && counts[n.countKey(h.Host)] > 1 {
 				n.Display += " · " + shortID(n.ID)
 			}
 		}
