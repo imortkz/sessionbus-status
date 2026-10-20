@@ -56,7 +56,7 @@ func askIDs(report Report, state State) map[string]bool {
 		}
 		for _, row := range host.Sessions {
 			present[row.SessionID] = true
-			if row.Product == "bus-status" {
+			if row.Product == collectorProduct {
 				collectors[row.SessionID] = true
 			}
 		}
@@ -64,7 +64,7 @@ func askIDs(report Report, state State) map[string]bool {
 	ids := map[string]bool{}
 	for id, rec := range state.Sessions {
 		_, host, _ := strings.Cut(id, "@")
-		if !collectors[id] && rec.Product != "bus-status" && sanitize(rec.Ask) != "" && (present[id] || failedHosts[host]) {
+		if !collectors[id] && rec.Product != collectorProduct && sanitize(rec.Ask) != "" && (present[id] || failedHosts[host]) {
 			ids[id] = true
 		}
 	}
@@ -79,7 +79,7 @@ func newAsks(prev, cur map[string]bool) bool {
 	return false
 }
 func header(now time.Time, host string, count int, incomplete bool) string {
-	text := "bus-status · " + now.Format("15:04:05")
+	text := uiAppName + " · " + now.Format("15:04:05")
 	if host != "" {
 		text += " · " + sanitize(host)
 	}

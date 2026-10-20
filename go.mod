@@ -1,4 +1,4 @@
-module bus-status
+module github.com/imortkz/sessionbus-status
 
 go 1.25
 

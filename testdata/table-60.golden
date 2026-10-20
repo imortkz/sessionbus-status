@@ -1,5 +1,5 @@
 ╭──────────────────────────────────────────────────────────╮
-│bus-status · local · 14:32:05 · collector: not found · 🔇 │
+│sessionbus-status · collector: not found · 🔇             │
 │  SESSION       STATUS     AGE      MODEL          HARNESS│
 │◐ ▾ project     busy busy… 1m       opus-5-5       claude │
 │●   └ developer tests tes… 5s       glm-5.3        dsh    │

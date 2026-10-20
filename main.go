@@ -1,4 +1,4 @@
-// Command bus-status shows what Sessionbus peers and lanes are doing.
+// Command sessionbus-status shows what Sessionbus peers and lanes are doing.
 package main
 
 import (
@@ -28,7 +28,7 @@ func run(args []string) int {
 			args = args[1:]
 		default:
 			if !strings.HasPrefix(args[0], "-") {
-				fmt.Fprintln(os.Stderr, "bus-status: unknown command:", args[0])
+				fmt.Fprintln(os.Stderr, uiAppName+": unknown command:", args[0])
 				return 2
 			}
 		}
@@ -49,7 +49,7 @@ func runWatch(args []string) int {
 	timeout := flags.Duration("roster-timeout", 10*time.Second, "roster command timeout (default max(interval, 10s))")
 	once := flags.Bool("once", false, "print one frame")
 	path := flags.String("state", defaultStatePath(), "state file")
-	groups := flags.String("g", "bus-status", "comma-separated shared groups")
+	groups := flags.String("g", collectorProduct, "comma-separated shared groups")
 	muted := flags.Bool("no-sound", false, "mute sound and notifications")
 	sound := flags.String("sound", "/System/Library/Sounds/Glass.aiff", "notification sound path")
 	roster := flags.String("roster", "sessionbus roster --json", "roster command (space-separated)")
@@ -67,7 +67,7 @@ func runWatch(args []string) int {
 	}
 	command := strings.Fields(*roster)
 	if flags.NArg() != 0 || len(command) == 0 || *interval <= 0 || *timeout <= 0 {
-		fmt.Fprintln(os.Stderr, "bus-status: expected a roster command and positive interval/roster-timeout")
+		fmt.Fprintln(os.Stderr, uiAppName+": expected a roster command and positive interval/roster-timeout")
 		return 2
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -92,7 +92,7 @@ func runWatch(args []string) int {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "bus-status:", err)
+		fmt.Fprintln(os.Stderr, uiAppName+":", err)
 		return 1
 	}
 	wg := &sync.WaitGroup{}
@@ -102,7 +102,7 @@ func runWatch(args []string) int {
 	cancel()
 	waitCollector(wg, 2*time.Second)
 	if runErr != nil && !wasCanceled {
-		fmt.Fprintln(os.Stderr, "bus-status:", runErr)
+		fmt.Fprintln(os.Stderr, uiAppName+":", runErr)
 		return 1
 	}
 

@@ -23,7 +23,7 @@ func TestAlertSchedule(t *testing.T) {
 			}
 			return
 		}
-		if len(got) != 2 || got[0].Kind != "sound" || got[1].Kind != "notify" || got[1].Title != "bus-status" || got[1].Body != want {
+		if len(got) != 2 || got[0].Kind != "sound" || got[1].Kind != "notify" || got[1].Title != "sessionbus-status" || got[1].Body != want {
 			t.Fatal(got)
 		}
 	}
@@ -58,8 +58,8 @@ func TestNotifierArgs(t *testing.T) {
 	n := macNotifier{start: func(cmd *exec.Cmd) { calls = append(calls, append([]string(nil), cmd.Args...)) }}
 	body := `quote " & do shell script "bad"`
 	n.Sound("sound with spaces.aiff")
-	n.Notify("bus-status", body)
-	want := [][]string{{"afplay", "sound with spaces.aiff"}, {"osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", "bus-status", body}}
+	n.Notify("sessionbus-status", body)
+	want := [][]string{{"afplay", "sound with spaces.aiff"}, {"osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", "sessionbus-status", body}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("%q", calls)
 	}
@@ -93,7 +93,7 @@ func TestNotifierStreams(t *testing.T) {
 		}
 	}}
 	n.Sound("fake.aiff")
-	n.Notify("bus-status", "question")
+	n.Notify("sessionbus-status", "question")
 	if len(commands) != 2 || commands[0].Args[0] != "afplay" || commands[1].Args[0] != "osascript" {
 		t.Fatal(commands)
 	}

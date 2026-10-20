@@ -1,4 +1,4 @@
-bus-status · 14:32:05 · macbook    ⚠ 1 waiting for you
+sessionbus-status · 14:32:05 · macbook    ⚠ 1 waiting for you
 
   SESSION                   STATUS                                   AGE      MODEL          HARNESS
 ⚠ ▾ openclaw-peer           WAITING: одобрить PLAN bus-status        3m       opus-5-5       claude

@@ -34,26 +34,26 @@ func (c *collector) deliver(_ context.Context, _ sdk.PeerIdentity, req sdk.Deliv
 		c.state.Sessions[req.From.SessionID] = rec
 		c.state.Version = 2
 		if err := saveState(c.path, c.state); err != nil {
-			fmt.Fprintln(c.diagnosticWriter(), "bus-status: save:", err)
+			fmt.Fprintln(c.diagnosticWriter(), uiAppName+": save:", err)
 		}
 	}
 	return sdk.DeliveryReceipt{Disposition: "written"}, nil
 }
 func runServe(args []string) int {
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
-	groups := flags.String("g", "bus-status", "comma-separated shared groups")
+	groups := flags.String("g", collectorProduct, "comma-separated shared groups")
 	path := flags.String("state", defaultStatePath(), "state file")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "bus-status: unexpected serve arguments")
+		fmt.Fprintln(os.Stderr, uiAppName+": unexpected serve arguments")
 		return 2
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if err := startCollector(ctx, *path, *groups, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "bus-status:", err)
+		fmt.Fprintln(os.Stderr, uiAppName+":", err)
 		return 1
 	}
 	return 0
@@ -71,7 +71,7 @@ func startCollector(ctx context.Context, path, groups string, diagnostics io.Wri
 			shared = append(shared, g)
 		}
 	}
-	peer, err := sdk.ConnectPeerContext(ctx, sdk.PeerIdentity{Product: "bus-status", SessionID: "bus-status", Name: "bus-status", Groups: shared, Info: map[string]any{}}, c.deliver)
+	peer, err := sdk.ConnectPeerContext(ctx, sdk.PeerIdentity{Product: collectorProduct, SessionID: collectorProduct, Name: collectorProduct, Groups: shared, Info: map[string]any{}}, c.deliver)
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func startCollector(ctx context.Context, path, groups string, diagnostics io.Wri
 	for {
 		select {
 		case <-ready:
-			fmt.Fprintln(diagnostics, "bus-status: connected")
+			fmt.Fprintln(diagnostics, uiAppName+": connected")
 			ready = nil
 		case <-ctx.Done():
 			peer.Shutdown()
@@ -99,10 +99,10 @@ func loadCollectorState(path string, warnings io.Writer) State {
 	if err == nil {
 		return state
 	}
-	fmt.Fprintln(warnings, "bus-status: warning: cannot load state:", err)
+	fmt.Fprintln(warnings, uiAppName+": warning: cannot load state:", err)
 	backup := fmt.Sprintf("%s.corrupt-%d", path, time.Now().Unix())
 	if err := os.Rename(path, backup); err != nil {
-		fmt.Fprintln(warnings, "bus-status: warning: cannot preserve bad state:", err)
+		fmt.Fprintln(warnings, uiAppName+": warning: cannot preserve bad state:", err)
 	}
 	return State{Version: 1, Sessions: make(map[string]Record)}
 }

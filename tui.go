@@ -170,7 +170,7 @@ func (m *Model) pollState() tea.Cmd {
 		activity := map[string]time.Time{}
 		at := now()
 		for _, row := range rows {
-			if row.Kind != "peer" || row.Product == "bus-status" {
+			if row.Kind != "peer" || row.Product == collectorProduct {
 				continue
 			}
 			id, _, _ := strings.Cut(row.SessionID, "@")
@@ -325,7 +325,7 @@ func (m *Model) requestLog() tea.Cmd {
 func (m *Model) collectorDecision() tea.Cmd {
 	external := false
 	for _, r := range m.report.Local.Sessions {
-		if r.Product == "bus-status" && r.Connected {
+		if r.Product == collectorProduct && r.Connected {
 			external = true
 			break
 		}
@@ -632,8 +632,8 @@ func (m *Model) View() string {
 	if count > 0 {
 		badges += " · " + fmt.Sprintf(uiWaitingCount, count)
 	}
-	core := "bus-status · " + collector + " · " + icon
-	head := "bus-status · " + cleanText(m.report.Local.Host, 120) + " · " + m.now().Format("15:04:05") + " · " + collector + " · " + icon + badges
+	core := uiAppName + " · " + collector + " · " + icon
+	head := uiAppName + " · " + cleanText(m.report.Local.Host, 120) + " · " + m.now().Format("15:04:05") + " · " + collector + " · " + icon + badges
 	if lipgloss.Width(head) > width {
 		head = core + badges
 	}

@@ -103,7 +103,7 @@ func TestKeysAndLayout(t *testing.T) {
 				t.Fatalf("too wide %d: %q", lipgloss.Width(line), line)
 			}
 		}
-		for _, want := range []string{"bus-status", uiCollector, "↑↓", "←→", "l ", "L ", "f ", "s ", "q "} {
+		for _, want := range []string{"sessionbus-status", uiCollector, "↑↓", "←→", "l ", "L ", "f ", "s ", "q "} {
 			if !strings.Contains(v, want) {
 				t.Fatalf("missing %q: %s", want, v)
 			}
@@ -315,7 +315,7 @@ func TestNarrowHeader(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	press(m, "f")
 	header := strings.Split(stripANSI(m.View()), "\n")[1]
-	for _, want := range []string{"bus-status", uiCollector + uiCollectorExternal, "🔇", uiShowAll, "⚠ 1"} {
+	for _, want := range []string{"sessionbus-status", uiCollector + uiCollectorExternal, "🔇", uiShowAll, "⚠ 1"} {
 		if !strings.Contains(header, want) {
 			t.Fatalf("missing %q: %s", want, header)
 		}
@@ -621,6 +621,9 @@ func TestTableViewGolden(t *testing.T) {
 			m.Update(stateMsg{state: s})
 			m.Update(rosterMsg{report: r})
 			got := stripANSI(m.View()) + "\n"
+			if width == 60 && !strings.Contains(got, "sessionbus-status · collector: not found · 🔇") {
+				t.Fatalf("narrow header: %s", got)
+			}
 			for _, want := range []string{uiSession, uiStatus, uiModel, uiHarness, "developer", "opus-5-5", "glm-5.3", "…"} {
 				if !strings.Contains(got, want) {
 					t.Fatalf("missing %q:\n%s", want, got)
@@ -929,7 +932,7 @@ func TestCollectorDiagnosticsStayOffTerminal(t *testing.T) {
 	var diagnostics io.Writer
 	m.startCollector = func(ctx context.Context, _, _ string, w io.Writer) error {
 		diagnostics = w
-		fmt.Fprintln(w, "bus-status: connected")
+		fmt.Fprintln(w, "sessionbus-status: connected")
 		close(started)
 		<-ctx.Done()
 		return nil
@@ -951,7 +954,7 @@ func TestCollectorDiagnosticsStayOffTerminal(t *testing.T) {
 		putLog(t, blocked, nil)
 		c := &collector{path: filepath.Join(blocked, "state.json"), diagnostics: diagnostics}
 		delivery(t, c, "sender", "status: working")
-		fmt.Fprintln(diagnostics, "bus-status: save: failed\x1b\u202e")
+		fmt.Fprintln(diagnostics, "sessionbus-status: save: failed\x1b\u202e")
 		m.Update(m.pollCollectorDiagnostics()())
 		if m.collectorLast != "save: failed" || !strings.Contains(stripANSI(m.View()), uiCollectorError+"save: failed") {
 			t.Fatal(m.View())
@@ -967,7 +970,7 @@ func TestCollectorDiagnosticsStayOffTerminal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"previous\n", "bus-status: connected", "warning: cannot load state", "bus-status: save:"} {
+	for _, want := range []string{"previous\n", "sessionbus-status: connected", "warning: cannot load state", "sessionbus-status: save:"} {
 		if !strings.Contains(string(data), want) {
 			t.Fatal("missing log entry", want, string(data))
 		}

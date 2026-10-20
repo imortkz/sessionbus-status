@@ -52,7 +52,7 @@ func BuildTree(report Report, state State, now time.Time, activity map[string]ti
 		}
 		rows := map[string]Row{}
 		for _, row := range host.Sessions {
-			if row.Product != "bus-status" {
+			if row.Product != collectorProduct {
 				rows[row.SessionID] = row
 			}
 		}
