@@ -22,6 +22,9 @@ func main() { os.Exit(run(os.Args[1:])) }
 func run(args []string) int {
 	if len(args) > 0 {
 		switch args[0] {
+		case "--version", "-version", "version":
+			fmt.Println(versionLine())
+			return 0
 		case "serve":
 			return runServe(args[1:])
 		case "watch":
