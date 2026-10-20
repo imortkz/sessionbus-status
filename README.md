@@ -8,7 +8,7 @@
 
 An interactive terminal tree of [Sessionbus](https://github.com/antst/sessionbus) peers and their lanes. One tab shows each session's harness, self-reported model, current activity and age, with status history or a live native log below the tree. Questions waiting for the owner appear first with a red `⚠`, an audible macOS sound and a system notification.
 
-Status: alpha (`v0.1.0-alpha.1`). Interfaces may change.
+Status: alpha (`v0.1.0-alpha.2`). Interfaces may change.
 
 ## Install
 
@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/imortkz/sessionbus-status/main/scri
 The installer downloads the newest release (prereleases included) for your platform (Linux or macOS, amd64 or arm64), verifies it against `SHA256SUMS`, and installs `~/.local/bin/sessionbus-status`. Pin a version with `SESSIONBUS_STATUS_VERSION`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/imortkz/sessionbus-status/main/scripts/install.sh | SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.1 sh
+curl -fsSL https://raw.githubusercontent.com/imortkz/sessionbus-status/main/scripts/install.sh | SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.2 sh
 sessionbus-status --version
 ```
 
