@@ -61,6 +61,7 @@ func LocateLog(home, sessionID, product string) (string, string, error) {
 type LogLine struct {
 	At         time.Time
 	Kind, Text string
+	Tool       string
 }
 type LogReader struct {
 	path, kind string
@@ -153,18 +154,29 @@ func (r *LogReader) Read() ([]LogLine, error) {
 	}
 	return out, nil
 }
-func logLine(kind, text, stamp string) LogLine {
-	limit := 200
-	switch kind {
-	case "TEXT":
-		limit = 300
-	case "TOOL":
-		limit = 120
-	case "RESULT":
-		limit = 140
+func logLimit(kind string) int {
+	if kind == "TOOL" {
+		return 400
 	}
+	return 2000
+}
+
+// Keep only deliberate line breaks between individually cleaned lines.
+func cleanLogText(text string, limit int) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(text, "\n")
+	for i := range lines {
+		lines[i] = cleanText(lines[i], 0)
+	}
+	runes := []rune(strings.Join(lines, "\n"))
+	if limit > 0 && len(runes) > limit {
+		runes = runes[:limit]
+	}
+	return string(runes)
+}
+func logLine(kind, text, stamp string) LogLine {
 	at, _ := time.Parse(time.RFC3339Nano, stamp)
-	return LogLine{at, kind, cleanText(text, limit)}
+	return LogLine{At: at, Kind: kind, Text: cleanLogText(text, logLimit(kind))}
 }
 func object(v any) map[string]any { m, _ := v.(map[string]any); return m }
 func str(v any) string            { s, _ := v.(string); return s }
@@ -205,6 +217,13 @@ func parseLog(kind string, b []byte) []LogLine {
 			out = append(out, line)
 		}
 	}
+	emitTool := func(name, args string) {
+		line := logLine("TOOL", args, stamp)
+		line.Tool = cleanText(name, 120)
+		if line.Tool != "" || line.Text != "" {
+			out = append(out, line)
+		}
+	}
 	switch kind {
 	case "claude":
 		if typ != "assistant" && typ != "user" {
@@ -236,7 +255,7 @@ func parseLog(kind string, b []byte) []LogLine {
 						break
 					}
 				}
-				emit("TOOL", str(p["name"])+" "+key)
+				emitTool(str(p["name"]), key)
 			case "tool_result":
 				emit("RESULT", contentText(p["content"]))
 			}
@@ -264,7 +283,7 @@ func parseLog(kind string, b []byte) []LogLine {
 				if args == nil {
 					args = p["input"]
 				}
-				emit("TOOL", str(p["name"])+" "+argumentText(args))
+				emitTool(str(p["name"]), argumentText(args))
 			case "function_call_output", "custom_tool_call_output":
 				emit("RESULT", contentText(p["output"]))
 			}
@@ -291,7 +310,7 @@ func parseLog(kind string, b []byte) []LogLine {
 				}
 				emit("THINK", s)
 			case "tool-call":
-				emit("TOOL", str(p["name"])+" "+argumentText(p["arguments"]))
+				emitTool(str(p["name"]), argumentText(p["arguments"]))
 			case "tool-result":
 				emit("RESULT", contentText(p["content"]))
 			}

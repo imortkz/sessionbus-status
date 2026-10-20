@@ -519,18 +519,6 @@ func (m *Model) paneContent() string {
 	}
 	return strings.Join(lines, "\n")
 }
-func logLimit(kind string) int {
-	switch kind {
-	case "TEXT":
-		return 300
-	case "TOOL":
-		return 120
-	case "RESULT":
-		return 140
-	default:
-		return 200
-	}
-}
 func (m *Model) View() string {
 	if !m.sized {
 		return ""

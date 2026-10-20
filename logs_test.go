@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"github.com/klauspost/compress/zstd"
 	"os"
 	"path/filepath"
@@ -127,8 +128,8 @@ func TestParseLimits(t *testing.T) {
 	for _, tt := range []struct {
 		kind  string
 		limit int
-	}{{"TEXT", 300}, {"TOOL", 120}, {"RESULT", 140}, {"SYS", 200}, {"THINK", 200}} {
-		if got := logLine(tt.kind, strings.Repeat("я", 400), ""); len([]rune(got.Text)) != tt.limit {
+	}{{"TEXT", 2000}, {"TOOL", 400}, {"RESULT", 2000}, {"SYS", 2000}, {"THINK", 2000}} {
+		if got := logLine(tt.kind, strings.Repeat("я", 2500), ""); len([]rune(got.Text)) != tt.limit {
 			t.Fatal(tt, got)
 		}
 	}
@@ -205,5 +206,36 @@ func TestLogReplacement(t *testing.T) {
 	lines, err := r.Read()
 	if err != nil || len(lines) != 1 || lines[0].Text != "replacement" {
 		t.Fatal(lines, err)
+	}
+}
+
+func TestParseLongRecordAndToolName(t *testing.T) {
+	text := strings.Repeat("界", 1200) + "\nsecond\x1b\u202e\tline" + strings.Repeat("🙂", 1200)
+	raw, _ := json.Marshal(map[string]any{"type": "assistant", "message": map[string]any{"content": []any{map[string]any{"type": "text", "text": text}, map[string]any{"type": "tool_use", "name": "Bash\x1b\u202e", "input": map[string]any{"command": strings.Repeat("x", 500)}}}}})
+	lines := parseLog("claude", raw)
+	if len(lines) != 2 || len([]rune(lines[0].Text)) != 2000 || !strings.Contains(lines[0].Text, "\nsecond line") {
+		t.Fatal(lines)
+	}
+	if lines[1].Tool != "Bash" || len([]rune(lines[1].Text)) != 400 {
+		t.Fatal(lines[1])
+	}
+	for _, l := range lines {
+		if strings.ContainsAny(l.Text+l.Tool, "\x1b\u202e\t") {
+			t.Fatal("unsafe log", l)
+		}
+	}
+	for _, kind := range []string{"claude", "codex"} {
+		data, _ := os.ReadFile("testdata/logs/" + kind + ".jsonl")
+		var tool string
+		for _, raw := range bytes.Split(data, []byte{'\n'}) {
+			for _, l := range parseLog(kind, raw) {
+				if l.Kind == "TOOL" {
+					tool = l.Tool
+				}
+			}
+		}
+		if tool == "" {
+			t.Fatal("tool name missing", kind)
+		}
 	}
 }
