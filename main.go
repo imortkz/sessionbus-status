@@ -43,15 +43,25 @@ func isTerminal(file *os.File) bool {
 func runWatch(args []string) int {
 	flags := flag.NewFlagSet("watch", flag.ContinueOnError)
 	interval := flags.Duration("interval", 2*time.Second, "refresh interval")
+	timeout := flags.Duration("roster-timeout", 10*time.Second, "roster command timeout (default max(interval, 10s))")
 	once := flags.Bool("once", false, "print one frame")
 	path := flags.String("state", defaultStatePath(), "state file")
 	roster := flags.String("roster", "sessionbus roster --json", "roster command (space-separated)")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
+	timeoutSet := false
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "roster-timeout" {
+			timeoutSet = true
+		}
+	})
+	if !timeoutSet {
+		*timeout = max(*interval, 10*time.Second)
+	}
 	command := strings.Fields(*roster)
-	if flags.NArg() != 0 || len(command) == 0 || *interval <= 0 {
-		fmt.Fprintln(os.Stderr, "bus-status: expected a roster command and a positive interval")
+	if flags.NArg() != 0 || len(command) == 0 || *interval <= 0 || *timeout <= 0 {
+		fmt.Fprintln(os.Stderr, "bus-status: expected a roster command and positive interval/roster-timeout")
 		return 2
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -63,21 +73,17 @@ func runWatch(args []string) int {
 		if ctx.Err() != nil {
 			return 0
 		}
-		cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-		runErr := cmd.Run()
+		stdout, stderr, runErr := runRoster(ctx, command, *timeout)
 		if ctx.Err() != nil {
 			return 0
 		}
 		state, loadErr := loadState(*path)
 		now := time.Now()
-		frame := Frame(stdout.Bytes(), stderr.Bytes(), runErr, state, now, color)
+		frame := Frame(stdout, stderr, runErr, state, now, color)
 		if loadErr != nil {
 			frame += "Ошибка state: " + sanitize(loadErr.Error()) + "\n"
 		}
-		report, decodeErr := decodeReport(stdout.Bytes())
+		report, decodeErr := decodeReport(stdout)
 		if *once {
 			fmt.Fprint(os.Stdout, frame)
 			if decodeErr != nil {
@@ -108,4 +114,19 @@ func nextBell(prev map[string]bool, report Report, decodeErr error, state State)
 	}
 	cur := askIDs(report, state)
 	return newAsks(prev, cur), cur
+}
+
+func runRoster(ctx context.Context, command []string, timeout time.Duration) ([]byte, []byte, error) {
+	tickCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	cmd := exec.CommandContext(tickCtx, command[0], command[1:]...)
+	// Bound pipe draining too if a command leaves descendants holding its pipes.
+	cmd.WaitDelay = 100 * time.Millisecond
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	if tickCtx.Err() != nil {
+		return nil, nil, fmt.Errorf("roster command: %w", tickCtx.Err())
+	}
+	return stdout.Bytes(), stderr.Bytes(), err
 }

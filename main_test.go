@@ -2,7 +2,10 @@ package main
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestBellPreservesAsksAcrossFailedTick(t *testing.T) {
@@ -23,5 +26,29 @@ func TestBellPreservesAsksAcrossFailedTick(t *testing.T) {
 	bell, _ = nextBell(prev, report, nil, state)
 	if !bell {
 		t.Fatal("new ask did not ring")
+	}
+}
+
+func TestRosterTimeout(t *testing.T) {
+	out, err := os.CreateTemp(t.TempDir(), "stdout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	saved := os.Stdout
+	os.Stdout = out
+	defer func() { os.Stdout = saved }()
+	start := time.Now()
+	code := runWatch([]string{"-once", "-roster", "sleep 5", "-roster-timeout", "200ms", "-state", t.TempDir() + "/missing"})
+	elapsed := time.Since(start)
+	data, err := os.ReadFile(out.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 1 || !strings.Contains(string(data), "Ошибка roster:") || !strings.Contains(string(data), "deadline exceeded") {
+		t.Fatalf("code %d output %q", code, data)
+	}
+	if elapsed < 150*time.Millisecond || elapsed > 2*time.Second {
+		t.Fatalf("deadline took %s", elapsed)
 	}
 }

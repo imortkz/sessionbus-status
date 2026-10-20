@@ -22,7 +22,7 @@ bin/bus-status
 bin/bus-status -once
 ```
 
-`watch` is the default command. Options: `-interval 2s`, `-once`, `-state PATH`, `-roster "sessionbus roster --json"`. Both processes accept `-state PATH`; their default is `$XDG_STATE_HOME/bus-status/state.json`, or `~/.local/state/bus-status/state.json`. Color requires a terminal and an unset `NO_COLOR`.
+`watch` is the default command. Options: `-interval 2s`, `-roster-timeout 10s` (default: the greater of the interval and 10s), `-once`, `-state PATH`, `-roster "sessionbus roster --json"`. Both processes accept `-state PATH`; their default is `$XDG_STATE_HOME/bus-status/state.json`, or `~/.local/state/bus-status/state.json`. Color requires a terminal and an unset `NO_COLOR`.
 
 Message protocol (what agents send with Sessionbus `send` to target `bus-status@<host>`), one or more lines:
 - `status: <text>` — what I am doing now; also clears my ask.
