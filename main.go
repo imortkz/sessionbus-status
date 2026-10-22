@@ -103,7 +103,7 @@ func runWatch(args []string) int {
 	}
 	wg := &sync.WaitGroup{}
 	model := newModel(tuiConfig{color: color, collectorWG: wg, ctx: ctx, cancel: cancel, statePath: *path, home: home, groups: *groups, sound: *sound, command: command, interval: *interval, timeout: *timeout, muted: *muted, ignore: ignore})
-	_, runErr := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
+	runErr := runProgram(ctx, model)
 	wasCanceled := ctx.Err() != nil
 	cancel()
 	waitCollector(wg, 2*time.Second)
@@ -113,6 +113,11 @@ func runWatch(args []string) int {
 	}
 
 	return 0
+}
+
+var runProgram = func(ctx context.Context, model *Model) error {
+	_, err := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
+	return err
 }
 
 // Failed roster ticks provide no evidence that an existing ask disappeared.

@@ -209,6 +209,28 @@ func TestFilterReportIgnore(t *testing.T) {
 	if len(report.Local.Sessions) != 7 || len(report.Remote[0].Sessions) != 3 {
 		t.Fatal("filterReport mutated its input")
 	}
+	// Owners listed after their sessions, names with "@", collector rows kept.
+	report = Report{Local: Host{Host: "local", Sessions: []Row{
+		{SessionID: "grand@local", Name: "x@local", Kind: "lane", Owner: "child@local"},
+		{SessionID: "child@local", Name: "y@local", Kind: "lane", Owner: "team@local"},
+		{SessionID: "team@local", Name: "team@dept@local", Kind: "peer"},
+		{SessionID: "old@local", Name: "team@dept/old@local", Kind: "lane"},
+		{SessionID: "bus-status@local", Name: "bus-status@local", Kind: "peer", Product: collectorProduct, Owner: "team@local"},
+		{SessionID: "keep@local", Name: "keep@local", Kind: "peer"},
+	}}, Remote: []Host{{Host: "dept", Sessions: []Row{{SessionID: "team@dept", Name: "team@dept", Kind: "peer"}}}}}
+	for _, tc := range []struct {
+		ignore []string
+		want   string
+	}{
+		{[]string{"team@dept"}, "bus-status@local keep@local"},
+		{[]string{"team@dept@local"}, "bus-status@local keep@local team@dept"},
+		{[]string{"team@dept@other"}, ids(report)},
+		{[]string{"bus-status"}, ids(report)},
+	} {
+		if got := ids(filterReport(report, tc.ignore)); got != tc.want {
+			t.Fatalf("ignore %v: got %q want %q", tc.ignore, got, tc.want)
+		}
+	}
 }
 func TestIgnoreFlagHidesPeerAndAsk(t *testing.T) {
 	out, err := os.CreateTemp(t.TempDir(), "stdout")

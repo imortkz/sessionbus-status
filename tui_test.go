@@ -1251,3 +1251,23 @@ func TestAlertTabLocalOnly(t *testing.T) {
 		t.Fatal(n.notes)
 	}
 }
+func TestPollRosterIgnore(t *testing.T) {
+	_, _, now := fixture(t)
+	starts := 0
+	m := newModel(tuiConfig{ctx: context.Background(), statePath: t.TempDir() + "/missing", home: t.TempDir(), interval: time.Second, timeout: time.Second, sound: "test.aiff",
+		command: []string{"cat", "testdata/roster.json"}, ignore: []string{"bus-status", "demo-peer"}})
+	m.now = func() time.Time { return now }
+	m.startCollector = func(context.Context, string, string, io.Writer) error { starts++; return nil }
+	n := &fakeNotifier{}
+	m.notifier = n
+	m.alerts.Tick(now, nil)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m.Update(stateMsg{state: State{Sessions: map[string]Record{"master@laptop": {Ask: "одобрить PLAN"}, "orphan@laptop": {Status: "visible control"}}}})
+	_, cmd := m.Update(m.pollRoster()())
+	runActions(cmd)
+	view := stripANSI(m.View())
+	if starts != 0 || m.collectorMode != uiCollectorExternal || len(n.sounds)+len(n.notes) != 0 ||
+		strings.Contains(view, "demo-peer") || strings.Contains(view, "researcher-bus-status") || !strings.Contains(view, "visible control") || strings.Contains(view, fmt.Sprintf(uiWaitingCount, 1)) {
+		t.Fatal(starts, m.collectorMode, n, view)
+	}
+}

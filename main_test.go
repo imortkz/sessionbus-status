@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strings"
@@ -50,5 +51,15 @@ func TestRosterTimeout(t *testing.T) {
 	}
 	if elapsed < 150*time.Millisecond || elapsed > 2*time.Second {
 		t.Fatalf("deadline took %s", elapsed)
+	}
+}
+
+func TestIgnoreFlagReachesTUI(t *testing.T) {
+	saved := runProgram
+	defer func() { runProgram = saved }()
+	var got []string
+	runProgram = func(_ context.Context, m *Model) error { got = m.config.ignore; return nil }
+	if code := runWatch([]string{"--ignore", "a,b", "-ignore", "c", "-state", t.TempDir() + "/state.json"}); code != 0 || strings.Join(got, " ") != "a b c" {
+		t.Fatal(code, got)
 	}
 }

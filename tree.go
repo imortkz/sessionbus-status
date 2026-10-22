@@ -59,24 +59,25 @@ func (l *ignoreList) Set(v string) error {
 	return nil
 }
 
-// ignoredRow matches the roster name with or without its "@host" suffix; a name
-// given with "@host" matches only on that host. A lane named "<name>/..." keeps
-// its owner's name, so it is hidden even after the owner leaves the roster.
+// ignoredRow matches the full roster name or the name without this host's
+// "@host" suffix, so "name" hides it on every host and "name@host" on one;
+// names may contain "@" themselves. A lane named "<name>/..." keeps its owner's
+// name, so it is hidden even after the owner leaves the roster.
 func ignoredRow(row Row, host string, ignore []string) bool {
 	base := strings.TrimSuffix(row.Name, "@"+host)
 	for _, ig := range ignore {
-		name, onlyHost, _ := strings.Cut(ig, "@")
-		if name == "" || (onlyHost != "" && onlyHost != host) {
-			continue
-		}
-		if base == name || (row.Kind != "peer" && strings.HasPrefix(base, name+"/")) {
-			return true
+		for _, name := range []string{ig, strings.TrimSuffix(ig, "@"+host)} {
+			if name != "" && (base == name || (row.Kind != "peer" && strings.HasPrefix(base, name+"/"))) {
+				return true
+			}
 		}
 	}
 	return false
 }
 
 // filterReport drops ignored peers and every session they own, transitively.
+// Collector rows stay: they are never displayed, and the TUI needs them to
+// decide whether an external collector is already running.
 func filterReport(report Report, ignore []string) Report {
 	if len(ignore) == 0 {
 		return report
@@ -89,7 +90,7 @@ func filterReport(report Report, ignore []string) Report {
 	drop := map[string]bool{}
 	for _, host := range hosts {
 		for _, row := range host.Sessions {
-			if ignoredRow(row, host.Host, ignore) {
+			if row.Product != collectorProduct && ignoredRow(row, host.Host, ignore) {
 				drop[row.SessionID] = true
 			}
 		}
@@ -98,7 +99,7 @@ func filterReport(report Report, ignore []string) Report {
 		grew = false
 		for _, host := range hosts {
 			for _, row := range host.Sessions {
-				if !drop[row.SessionID] && row.Owner != "" && drop[row.Owner] {
+				if !drop[row.SessionID] && row.Product != collectorProduct && row.Owner != "" && drop[row.Owner] {
 					drop[row.SessionID], grew = true, true
 				}
 			}
