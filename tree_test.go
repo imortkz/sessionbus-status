@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -57,7 +58,7 @@ func TestRenderOrphansHostsAndErrors(t *testing.T) {
 		}
 	}
 	data, _ := os.ReadFile("testdata/roster.json")
-	if got := Frame(data, []byte("command failed"), errors.New("exit 1"), state, now, false); !strings.Contains(got, "demo-peer") || strings.Contains(got, "command failed") {
+	if got := Frame(data, []byte("command failed"), errors.New("exit 1"), state, now, false, nil); !strings.Contains(got, "demo-peer") || strings.Contains(got, "command failed") {
 		t.Fatal(got)
 	}
 	// A waiting grandchild lifts its entire branch above a running root.
@@ -86,7 +87,7 @@ func TestRenderSanitizesInputs(t *testing.T) {
 	report.Remote[0].Error += poison
 	report.Error = poison
 	state.Sessions["master@laptop"] = Record{Ask: poison, Model: poison, Status: poison}
-	for _, got := range []string{Render(report, state, now, false), Frame([]byte("invalid"), []byte(poison), errors.New("bad"), state, now, false), Frame(nil, nil, errors.New(poison), state, now, false)} {
+	for _, got := range []string{Render(report, state, now, false), Frame([]byte("invalid"), []byte(poison), errors.New("bad"), state, now, false, nil), Frame(nil, nil, errors.New(poison), state, now, false, nil)} {
 		for _, r := range got {
 			if r != '\n' && (r < 32 || r == 127 || r >= 128 && r <= 159) {
 				t.Fatalf("control %U in %q", r, got)
@@ -126,11 +127,11 @@ func TestRenderRunningBeforeName(t *testing.T) {
 }
 func TestFrameErrorFallbackText(t *testing.T) {
 	_, state, now := fixture(t)
-	got := Frame([]byte("invalid"), []byte("  stderr diagnosis\x1b\n"), errors.New("run diagnosis"), state, now, false)
+	got := Frame([]byte("invalid"), []byte("  stderr diagnosis\x1b\n"), errors.New("run diagnosis"), state, now, false, nil)
 	if !strings.Contains(got, uiRosterError+"stderr diagnosis\n") || strings.Contains(got, "run diagnosis") {
 		t.Fatalf("stderr fallback: %q", got)
 	}
-	got = Frame([]byte("invalid"), nil, errors.New("run diagnosis"), state, now, false)
+	got = Frame([]byte("invalid"), nil, errors.New("run diagnosis"), state, now, false, nil)
 	if !strings.Contains(got, uiRosterError+"run diagnosis\n") {
 		t.Fatalf("run error fallback: %q", got)
 	}
@@ -167,5 +168,65 @@ func TestNeutralFixtureNames(t *testing.T) {
 	}
 	if report.Local.Sessions[0].Name != "demo-peer@laptop" {
 		t.Fatalf("fixture name: %q", report.Local.Sessions[0].Name)
+	}
+}
+func TestFilterReportIgnore(t *testing.T) {
+	report := Report{Local: Host{Host: "laptop", Sessions: []Row{
+		{SessionID: "keep@laptop", Name: "keep@laptop", Kind: "peer"},
+		{SessionID: "semi@laptop", Name: "semiurg@laptop", Kind: "peer"},
+		{SessionID: "lane@laptop", Name: "semiurg/dev@laptop", Kind: "lane", Owner: "semi@laptop"},
+		{SessionID: "sub@laptop", Name: "dev-sub@laptop", Kind: "lane", Owner: "lane@laptop"},
+		{SessionID: "orphan@laptop", Name: "semiurg/old@laptop", Kind: "lane", Owner: "gone@laptop"},
+		{SessionID: "other@laptop", Name: "innerconnect/rev@laptop", Kind: "lane", Owner: "keep@laptop"},
+		{SessionID: "prefixpeer@laptop", Name: "semiurg/x@laptop", Kind: "peer"},
+	}}, Remote: []Host{{Host: "office", Sessions: []Row{
+		{SessionID: "semi@office", Name: "semiurg@office", Kind: "peer"},
+		{SessionID: "lane@office", Name: "innerconnect_tests/dev@office", Kind: "lane", Owner: "semi@office"},
+		{SessionID: "semiurg2@office", Name: "semiurg2@office", Kind: "peer"},
+	}}}}
+	ids := func(r Report) string {
+		var out []string
+		for _, h := range append([]Host{r.Local}, r.Remote...) {
+			for _, row := range h.Sessions {
+				out = append(out, row.SessionID)
+			}
+		}
+		return strings.Join(out, " ")
+	}
+	for _, tc := range []struct {
+		ignore []string
+		want   string
+	}{
+		{nil, ids(report)},
+		{[]string{"semiurg"}, "keep@laptop other@laptop prefixpeer@laptop semiurg2@office"},
+		{[]string{"semiurg@office"}, "keep@laptop semi@laptop lane@laptop sub@laptop orphan@laptop other@laptop prefixpeer@laptop semiurg2@office"},
+		{[]string{"semiurg@laptop", "keep"}, "prefixpeer@laptop semi@office lane@office semiurg2@office"},
+	} {
+		if got := ids(filterReport(report, tc.ignore)); got != tc.want {
+			t.Fatalf("ignore %v: got %q want %q", tc.ignore, got, tc.want)
+		}
+	}
+	if len(report.Local.Sessions) != 7 || len(report.Remote[0].Sessions) != 3 {
+		t.Fatal("filterReport mutated its input")
+	}
+}
+func TestIgnoreFlagHidesPeerAndAsk(t *testing.T) {
+	out, err := os.CreateTemp(t.TempDir(), "stdout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	saved := os.Stdout
+	os.Stdout = out
+	defer func() { os.Stdout = saved }()
+	statePath := t.TempDir() + "/state.json"
+	if err := saveState(statePath, State{Sessions: map[string]Record{"master@laptop": {Ask: "одобрить PLAN"}}}); err != nil {
+		t.Fatal(err)
+	}
+	code := runWatch([]string{"-once", "-roster", "cat testdata/roster.json", "-state", statePath, "--ignore", "nobody", "--ignore", "demo-peer,orphan"})
+	data, _ := os.ReadFile(out.Name())
+	got := string(data)
+	if code != 0 || strings.Contains(got, "demo-peer") || strings.Contains(got, "researcher-bus-status") || strings.Contains(got, "orphan") || strings.Contains(got, "одобрить") || strings.Contains(got, fmt.Sprintf(uiWaitingCount, 1)) {
+		t.Fatalf("code %d output:\n%s", code, got)
 	}
 }

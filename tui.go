@@ -22,7 +22,7 @@ type tuiConfig struct {
 	ctx                            context.Context
 	cancel                         context.CancelFunc
 	statePath, home, groups, sound string
-	command                        []string
+	command, ignore                []string
 	interval, timeout              time.Duration
 	muted                          bool
 	color                          bool
@@ -155,7 +155,7 @@ func (m *Model) pollRoster() tea.Cmd {
 			}
 			return rosterMsg{err: err}
 		}
-		return rosterMsg{report: r}
+		return rosterMsg{report: filterReport(r, c.ignore)}
 	}
 }
 func (m *Model) pollState() tea.Cmd {

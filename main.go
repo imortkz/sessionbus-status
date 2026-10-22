@@ -56,6 +56,8 @@ func runWatch(args []string) int {
 	muted := flags.Bool("no-sound", false, "mute sound and notifications")
 	sound := flags.String("sound", "/System/Library/Sounds/Glass.aiff", "notification sound path")
 	roster := flags.String("roster", "sessionbus roster --json", "roster command (space-separated)")
+	var ignore ignoreList
+	flags.Var(&ignore, "ignore", "hide the peer with this name and its lanes (repeatable, comma-separated)")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -84,7 +86,7 @@ func runWatch(args []string) int {
 			return 0
 		}
 		state, loadErr := loadState(*path)
-		frame := Frame(stdout, stderr, runErr, state, time.Now(), color)
+		frame := Frame(stdout, stderr, runErr, state, time.Now(), color, ignore)
 		if loadErr != nil {
 			frame += uiStateError + sanitize(loadErr.Error()) + "\n"
 		}
@@ -100,7 +102,7 @@ func runWatch(args []string) int {
 		return 1
 	}
 	wg := &sync.WaitGroup{}
-	model := newModel(tuiConfig{color: color, collectorWG: wg, ctx: ctx, cancel: cancel, statePath: *path, home: home, groups: *groups, sound: *sound, command: command, interval: *interval, timeout: *timeout, muted: *muted})
+	model := newModel(tuiConfig{color: color, collectorWG: wg, ctx: ctx, cancel: cancel, statePath: *path, home: home, groups: *groups, sound: *sound, command: command, interval: *interval, timeout: *timeout, muted: *muted, ignore: ignore})
 	_, runErr := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
 	wasCanceled := ctx.Err() != nil
 	cancel()

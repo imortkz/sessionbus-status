@@ -52,7 +52,7 @@ sessionbus-status -once
 sessionbus-status serve -g bus-status
 ```
 
-`-once` prints the same ordered tree without starting a collector or playing sounds. `watch` is an alias for the TUI. The `serve` command remains available; launchd setup is left to the owner. `sessionbus-status --version` (or `version`) prints the release and revision.
+`-once` prints the same ordered tree without starting a collector or playing sounds. `-ignore <name>` (repeatable or comma-separated, also with `-once`) hides the peer with that roster name and every lane it owns, on every host; `<name>@<host>` limits it to one host. Lanes named `<name>/…` stay hidden after their owner leaves the roster. Ignored sessions do not ring or count as waiting; the collector still records them. `watch` is an alias for the TUI. The `serve` command remains available; launchd setup is left to the owner. `sessionbus-status --version` (or `version`) prints the release and revision.
 
 ## Keys and behaviour
 

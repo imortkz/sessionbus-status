@@ -46,6 +46,76 @@ func decodeReport(data []byte) (Report, error) {
 	return report, nil
 }
 
+// ignoreList collects repeated or comma-separated -ignore names.
+type ignoreList []string
+
+func (l *ignoreList) String() string { return strings.Join(*l, ",") }
+func (l *ignoreList) Set(v string) error {
+	for _, name := range strings.Split(v, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			*l = append(*l, name)
+		}
+	}
+	return nil
+}
+
+// ignoredRow matches the roster name with or without its "@host" suffix; a name
+// given with "@host" matches only on that host. A lane named "<name>/..." keeps
+// its owner's name, so it is hidden even after the owner leaves the roster.
+func ignoredRow(row Row, host string, ignore []string) bool {
+	base := strings.TrimSuffix(row.Name, "@"+host)
+	for _, ig := range ignore {
+		name, onlyHost, _ := strings.Cut(ig, "@")
+		if name == "" || (onlyHost != "" && onlyHost != host) {
+			continue
+		}
+		if base == name || (row.Kind != "peer" && strings.HasPrefix(base, name+"/")) {
+			return true
+		}
+	}
+	return false
+}
+
+// filterReport drops ignored peers and every session they own, transitively.
+func filterReport(report Report, ignore []string) Report {
+	if len(ignore) == 0 {
+		return report
+	}
+	hosts := []*Host{&report.Local}
+	report.Remote = append([]Host(nil), report.Remote...)
+	for i := range report.Remote {
+		hosts = append(hosts, &report.Remote[i])
+	}
+	drop := map[string]bool{}
+	for _, host := range hosts {
+		for _, row := range host.Sessions {
+			if ignoredRow(row, host.Host, ignore) {
+				drop[row.SessionID] = true
+			}
+		}
+	}
+	for grew := len(drop) > 0; grew; {
+		grew = false
+		for _, host := range hosts {
+			for _, row := range host.Sessions {
+				if !drop[row.SessionID] && row.Owner != "" && drop[row.Owner] {
+					drop[row.SessionID], grew = true, true
+				}
+			}
+		}
+	}
+	for _, host := range hosts {
+		var kept []Row
+		for _, row := range host.Sessions {
+			if !drop[row.SessionID] {
+				kept = append(kept, row)
+			}
+		}
+		host.Sessions = kept
+	}
+	return report
+}
+
 // A pending ask must belong to a current row, or to a host whose roster failed.
 // This same set drives both notifications and header counts.
 func askIDs(report Report, state State) map[string]bool {
@@ -269,10 +339,10 @@ func age(d time.Duration) string {
 		return fmt.Sprintf("%dd", int64(d/(24*time.Hour)))
 	}
 }
-func Frame(stdout, stderr []byte, runErr error, state State, now time.Time, color bool) string {
+func Frame(stdout, stderr []byte, runErr error, state State, now time.Time, color bool, ignore []string) string {
 	report, err := decodeReport(stdout)
 	if err == nil {
-		return Render(report, state, now, color)
+		return Render(filterReport(report, ignore), state, now, color)
 	}
 	message := strings.TrimSpace(string(stderr))
 	if message == "" {
