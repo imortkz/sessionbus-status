@@ -22,12 +22,12 @@ sums "$good" "$asset"
 # positive: pinned version from a file:// root
 home="$work/home"
 mkdir "$home"
-HOME=$home SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.2 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$good" sh "$repo/scripts/install.sh" >/dev/null ||
+HOME=$home SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.3 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$good" sh "$repo/scripts/install.sh" >/dev/null ||
   fail 'install from file root'
 [ -x "$home/.local/libexec/sessionbus/sessionbus-status/sessionbus-status" ] || fail 'binary not installed'
 [ -L "$home/.local/bin/sessionbus-status" ] || fail 'symlink missing'
 if [ -f "$repo/version.go" ]; then
-  "$home/.local/bin/sessionbus-status" --version | grep -Eq '^sessionbus-status v0\.1\.0-alpha\.2 \([0-9a-f]{40}\)$' || fail '--version output'
+  "$home/.local/bin/sessionbus-status" --version | grep -Eq '^sessionbus-status v0\.1\.0-alpha\.3 \([0-9a-f]{40}\)$' || fail '--version output'
 fi
 
 expect_fail() { # name, message-substring, env... -- runs install.sh with HOME=$work/neg
@@ -41,7 +41,7 @@ expect_fail() { # name, message-substring, env... -- runs install.sh with HOME=$
 # bad checksum
 bad="$work/bad"; mkdir "$bad"; cp "$good/$asset" "$bad/"
 printf '%064d  %s\n' 0 "$asset" > "$bad/SHA256SUMS"
-expect_fail 'bad checksum' 'checksum mismatch' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.2 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$bad"
+expect_fail 'bad checksum' 'checksum mismatch' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.3 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$bad"
 
 # bad version strings and download root
 expect_fail 'bad version' 'Invalid SESSIONBUS_STATUS_VERSION' SESSIONBUS_STATUS_VERSION=1.2
@@ -54,7 +54,7 @@ printf 'x\n' > "$evil/src/payload"
 (cd "$evil/src/sub" && tar -czPf "$evil/$asset" ../payload) || fail 'cannot build evil archive'
 tar -tzf "$evil/$asset" | grep -q '^\.\./' || fail 'evil archive lacks ../ member'
 sums "$evil" "$asset"
-expect_fail 'unsafe member' 'Unsafe archive member' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.2 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$evil"
+expect_fail 'unsafe member' 'Unsafe archive member' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.3 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$evil"
 
 # symlink member
 link="$work/link"; mkdir -p "$link/src"
@@ -62,7 +62,7 @@ printf 'sessionbus-status\n' > "$link/src/ROLE"
 ln -s /bin/sh "$link/src/install"
 tar -czf "$link/$asset" -C "$link/src" ROLE install
 sums "$link" "$asset"
-expect_fail 'symlink member' 'Unsafe archive member' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.2 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$link"
+expect_fail 'symlink member' 'Unsafe archive member' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.3 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$link"
 
 # wrong role
 role="$work/role"; mkdir -p "$role/src"
@@ -70,7 +70,7 @@ printf 'other\n' > "$role/src/ROLE"
 printf '#!/bin/sh\nexit 0\n' > "$role/src/install"
 tar -czf "$role/$asset" -C "$role/src" ROLE install
 sums "$role" "$asset"
-expect_fail 'wrong role' 'Wrong release role' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.2 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$role"
+expect_fail 'wrong role' 'Wrong release role' SESSIONBUS_STATUS_VERSION=v0.1.0-alpha.3 SESSIONBUS_STATUS_DOWNLOAD_ROOT="file://$role"
 
 # latest: fake curl serves the releases list; gh is reported unauthenticated
 fakebin="$work/fakebin"; mkdir "$fakebin"
