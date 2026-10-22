@@ -19,11 +19,11 @@ type Action struct{ Kind, Title, Body, ID, Tab string }
 type Alerts struct {
 	initialized bool
 	muted       bool
-	last        time.Time
 	known       map[string]bool
 }
 
-func (a *Alerts) Tick(now time.Time, asks []AskInfo) []Action {
+// Tick notifies each new ask once; a pending ask is never re-announced.
+func (a *Alerts) Tick(_ time.Time, asks []AskInfo) []Action {
 	asks = append([]AskInfo(nil), asks...)
 	sort.Slice(asks, func(i, j int) bool {
 		if !asks[i].Since.Equal(asks[j].Since) {
@@ -33,7 +33,6 @@ func (a *Alerts) Tick(now time.Time, asks []AskInfo) []Action {
 	})
 	if !a.initialized {
 		a.initialized = true
-		a.last = now
 		a.known = map[string]bool{}
 		for _, ask := range asks {
 			a.known[ask.ID] = true
@@ -42,7 +41,6 @@ func (a *Alerts) Tick(now time.Time, asks []AskInfo) []Action {
 	}
 	if len(asks) == 0 {
 		a.known = nil
-		a.last = time.Time{}
 		return nil
 	}
 	known := make(map[string]bool)
@@ -52,19 +50,11 @@ func (a *Alerts) Tick(now time.Time, asks []AskInfo) []Action {
 			actions = append(actions, Action{Kind: "sound"}, Action{Kind: "notify", Title: uiAppName, Body: cleanText(ask.Display+uiNotifyAsks+ask.Text, 200), ID: ask.ID, Tab: ask.Tab})
 		}
 	}
-	newAsk := false
 	for _, ask := range asks {
 		known[ask.ID] = true
 		if !a.known[ask.ID] {
-			newAsk = true
 			emit(ask)
 		}
-	}
-	if newAsk {
-		a.last = now
-	} else if now.Sub(a.last) >= time.Minute {
-		emit(asks[0])
-		a.last = now
 	}
 	a.known = known
 	return actions

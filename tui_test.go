@@ -213,18 +213,11 @@ func TestAlertDispatch(t *testing.T) {
 	if len(n.sounds) != 1 {
 		t.Fatal(n)
 	}
-	now = now.Add(30 * time.Second)
+	now = now.Add(time.Hour)
 	_, cmd = m.Update(stateMsg{state: s})
 	runActions(cmd)
-	if len(n.sounds) != 2 {
-		t.Fatal(n)
-	}
-	press(m, "s")
-	now = now.Add(time.Minute)
-	_, cmd = m.Update(stateMsg{state: s})
-	runActions(cmd)
-	if len(n.sounds) != 2 {
-		t.Fatal(n)
+	if len(n.sounds) != 1 || len(n.bodies) != 1 {
+		t.Fatal("pending ask re-announced", n)
 	}
 }
 func TestLogReadGeneration(t *testing.T) {
@@ -501,8 +494,8 @@ func TestAlertRosterFlap(t *testing.T) {
 	}
 	now = now.Add(50 * time.Second)
 	runActions(m.alertCmd())
-	if len(n.sounds) != 1 {
-		t.Fatal("reminder lost", n)
+	if len(n.sounds) != 0 {
+		t.Fatal("pending ask re-announced", n)
 	}
 	rec := s.Sessions["master@laptop"]
 	rec.Ask = ""
@@ -513,7 +506,7 @@ func TestAlertRosterFlap(t *testing.T) {
 	s.Sessions["master@laptop"] = rec
 	_, cmd = m.Update(stateMsg{state: s})
 	runActions(cmd)
-	if len(n.sounds) != 2 {
+	if len(n.sounds) != 1 {
 		t.Fatal("state clear not observed", n)
 	}
 }

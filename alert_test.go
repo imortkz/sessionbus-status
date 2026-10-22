@@ -32,7 +32,7 @@ func TestAlertSchedule(t *testing.T) {
 	check(now, []AskInfo{old}, "old asks: question")
 	check(now.Add(30*time.Second), []AskInfo{old}, "")
 	check(now.Add(35*time.Second), []AskInfo{newer, old}, "new asks: new question")
-	check(now.Add(95*time.Second), []AskInfo{newer, old}, "old asks: question")
+	check(now.Add(95*time.Second), []AskInfo{newer, old}, "")
 	a.muted = true
 	check(now.Add(155*time.Second), []AskInfo{old, newer}, "")
 	a.muted = false
@@ -77,8 +77,8 @@ func TestAlertStartupSilent(t *testing.T) {
 	if got := a.Tick(now.Add(59*time.Second), asks); len(got) != 0 {
 		t.Fatal(got)
 	}
-	if got := a.Tick(now.Add(time.Minute), asks); len(got) != 2 {
-		t.Fatal("missing reminder", got)
+	if got := a.Tick(now.Add(time.Hour), asks); len(got) != 0 {
+		t.Fatal("pending ask re-announced", got)
 	}
 	asks = append(asks, AskInfo{ID: "new", Display: "new", Text: "question"})
 	if got := a.Tick(now.Add(61*time.Second), asks); len(got) != 2 || got[1].Body != "new asks: question" {
