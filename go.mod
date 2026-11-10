@@ -3,7 +3,7 @@ module github.com/imortkz/sessionbus-status
 go 1.25
 
 require (
-	github.com/antst/sessionbus/bus/sdk/go v0.5.12
+	github.com/antst/sessionbus/bus/sdk/go v0.5.13
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
