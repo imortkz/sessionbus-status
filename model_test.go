@@ -28,14 +28,15 @@ func TestBuildTree(t *testing.T) {
 	if len(roots) != 4 {
 		t.Fatalf("roots %+v", roots)
 	}
-	if roots[0].ID != "aaaaaaaa-1" || !roots[0].HasAskBelow || roots[1].ID != "bbbbbbbb-2" {
+	// Name order: the ask below aaaaaaaa and the run of bbbbbbbb do not lift them.
+	if roots[0].ID != "orphanid-1" || roots[1].ID != "aaaaaaaa-1" || !roots[1].HasAskBelow || roots[2].ID != "bbbbbbbb-2" {
 		t.Fatal(roots)
 	}
-	if roots[0].Display != "same · aaaaaaaa" || roots[1].Display != "same · bbbbbbbb" || roots[0].Age != "11m" || roots[1].Age != "11m" {
-		t.Fatal(roots[0], roots[1])
+	if roots[1].Display != "same · aaaaaaaa" || roots[2].Display != "same · bbbbbbbb" || roots[1].Age != "11m" || roots[2].Age != "11m" {
+		t.Fatal(roots[1], roots[2])
 	}
-	if len(roots[0].Children) != 1 || !roots[0].Children[0].Ask || roots[0].Children[0].Line != uiWaiting+"approve" {
-		t.Fatal(roots[0])
+	if len(roots[1].Children) != 1 || !roots[1].Children[0].Ask || roots[1].Children[0].Line != uiWaiting+"approve" {
+		t.Fatal(roots[1])
 	}
 	var ids []string
 	var walk func(*Node)
@@ -249,5 +250,31 @@ func TestSelfNameDisambiguatedFromHostSuffixedRosterName(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in\n%s", want, got)
 		}
+	}
+}
+
+func TestBuildTreeOrderIgnoresAskAndRunning(t *testing.T) {
+	now := time.Now()
+	r := Report{Local: Host{Host: "local", Sessions: []Row{
+		{SessionID: "gggggggg-3", Name: "gamma", Product: "claude-peer"},
+		{SessionID: "bbbbbbbb-2", Name: "beta", Product: "codex-peer", Running: true},
+		{SessionID: "aaaaaaaa-1", Name: "alpha", Product: "claude-peer"},
+		{SessionID: "lane-z", Name: "zed", Owner: "aaaaaaaa-1", Product: "codex-peer", Running: true},
+		{SessionID: "lane-y", Name: "yak", Owner: "aaaaaaaa-1", Product: "codex-peer"},
+		{SessionID: "lane-x", Name: "xen", Owner: "aaaaaaaa-1", Product: "codex-peer"},
+	}}}
+	s := State{Sessions: map[string]Record{"gggggggg-3": {Ask: "approve?"}, "lane-y": {Ask: "need you"}}}
+	trees := BuildTree(r, s, now, nil, nil)
+	var roots, lanes []string
+	for _, n := range trees[0].Nodes {
+		roots = append(roots, n.Name)
+		if n.ID == "aaaaaaaa-1" {
+			for _, c := range n.Children {
+				lanes = append(lanes, c.Name)
+			}
+		}
+	}
+	if !reflect.DeepEqual(roots, []string{"alpha", "beta", "gamma"}) || !reflect.DeepEqual(lanes, []string{"xen", "yak", "zed"}) {
+		t.Fatalf("roots %v lanes %v", roots, lanes)
 	}
 }

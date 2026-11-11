@@ -6,7 +6,7 @@
 [![latest release](https://img.shields.io/github/v/release/imortkz/sessionbus-status?include_prereleases&sort=semver)](https://github.com/imortkz/sessionbus-status/releases)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-An interactive terminal tree of [Sessionbus](https://github.com/antst/sessionbus) peers and their lanes. One tab shows each session's harness, self-reported model, current activity and age, with status history or a live native log below the tree. Questions waiting for the owner appear first with a red `⚠`, an audible macOS sound and a system notification.
+An interactive terminal tree of [Sessionbus](https://github.com/antst/sessionbus) peers and their lanes. One tab shows each session's harness, self-reported model, current activity and age, with status history or a live native log below the tree. Rows are sorted by name and never move; questions waiting for the owner are marked with a red `⚠`, an audible macOS sound and a system notification.
 
 Status: alpha (`v0.1.0-alpha.4`). Interfaces may change.
 

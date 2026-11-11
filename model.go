@@ -198,13 +198,8 @@ func BuildTree(report Report, state State, now time.Time, activity, firstSeen ma
 		}
 		sortIDs := func(ids []string) {
 			sort.Slice(ids, func(i, j int) bool {
+				// Name order only: an ask or a run must not move rows (owner mirrors it in iTerm tabs).
 				a, b := nodes[ids[i]], nodes[ids[j]]
-				if a.HasAskBelow != b.HasAskBelow {
-					return a.HasAskBelow
-				}
-				if a.Running != b.Running {
-					return a.Running
-				}
 				if a.Display != b.Display {
 					return a.Display < b.Display
 				}

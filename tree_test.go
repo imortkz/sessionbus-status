@@ -61,12 +61,12 @@ func TestRenderOrphansHostsAndErrors(t *testing.T) {
 	if got := Frame(data, []byte("command failed"), errors.New("exit 1"), state, now, false, nil); !strings.Contains(got, "demo-peer") || strings.Contains(got, "command failed") {
 		t.Fatal(got)
 	}
-	// A waiting grandchild lifts its entire branch above a running root.
+	// A waiting grandchild moves nothing: rows stay in name order.
 	report.Local.Sessions = append(report.Local.Sessions, Row{SessionID: "grandchild", Owner: "researcher@laptop", Product: "codex-peer"})
 	state.Sessions["master@laptop"] = Record{}
 	state.Sessions["grandchild"] = Record{Ask: "question"}
 	got = Render(report, state, now, false)
-	if strings.Index(got, "demo-peer") > strings.Index(got, "orphan") || strings.Index(got, "researcher-bus") > strings.Index(got, "developer-bus") || !strings.Contains(got, "codex · grandchi") {
+	if strings.Index(got, "demo-peer") > strings.Index(got, "orphan") || strings.Index(got, "researcher-bus") < strings.Index(got, "developer-bus") || !strings.Contains(got, "codex · grandchi") {
 		t.Fatal(got)
 	}
 }
@@ -114,15 +114,15 @@ func TestRenderStatusOnlySanitization(t *testing.T) {
 		}
 	}
 }
-func TestRenderRunningBeforeName(t *testing.T) {
+func TestRenderNameOrderIgnoresRunning(t *testing.T) {
 	report, _, now := fixture(t)
 	report.Local.Sessions = []Row{
-		{SessionID: "idle", Name: "aaa-idle", Product: "codex-peer"},
 		{SessionID: "running", Name: "zzz-running", Product: "codex-peer", Running: true},
+		{SessionID: "idle", Name: "aaa-idle", Product: "codex-peer"},
 	}
 	got := Render(report, State{}, now, false)
-	if a, b := strings.Index(got, "● zzz-running"), strings.Index(got, "○ aaa-idle"); a < 0 || b < 0 || a > b {
-		t.Fatalf("running must precede idle regardless of name: %s", got)
+	if a, b := strings.Index(got, "○ aaa-idle"), strings.Index(got, "● zzz-running"); a < 0 || b < 0 || a > b {
+		t.Fatalf("rows must stay in name order regardless of running: %s", got)
 	}
 }
 func TestFrameErrorFallbackText(t *testing.T) {
