@@ -28,15 +28,16 @@ func TestBuildTree(t *testing.T) {
 	if len(roots) != 4 {
 		t.Fatalf("roots %+v", roots)
 	}
-	// Name order: the ask below aaaaaaaa and the run of bbbbbbbb do not lift them.
-	if roots[0].ID != "orphanid-1" || roots[1].ID != "aaaaaaaa-1" || !roots[1].HasAskBelow || roots[2].ID != "bbbbbbbb-2" {
+	// Name order: the ask below aaaaaaaa and the run of bbbbbbbb do not lift them; the cut
+	// ownership cycle sorts with the other roots.
+	if roots[0].ID != "cycle-a" || roots[1].ID != "orphanid-1" || roots[2].ID != "aaaaaaaa-1" || !roots[2].HasAskBelow || roots[3].ID != "bbbbbbbb-2" {
 		t.Fatal(roots)
 	}
-	if roots[1].Display != "same · aaaaaaaa" || roots[2].Display != "same · bbbbbbbb" || roots[1].Age != "11m" || roots[2].Age != "11m" {
-		t.Fatal(roots[1], roots[2])
+	if roots[2].Display != "same · aaaaaaaa" || roots[3].Display != "same · bbbbbbbb" || roots[2].Age != "11m" || roots[3].Age != "11m" {
+		t.Fatal(roots[2], roots[3])
 	}
-	if len(roots[1].Children) != 1 || !roots[1].Children[0].Ask || roots[1].Children[0].Line != uiWaiting+"approve" {
-		t.Fatal(roots[1])
+	if len(roots[2].Children) != 1 || !roots[2].Children[0].Ask || roots[2].Children[0].Line != uiWaiting+"approve" {
+		t.Fatal(roots[2])
 	}
 	var ids []string
 	var walk func(*Node)
@@ -279,13 +280,18 @@ func TestBuildTreeOrderIgnoresAskAndRunning(t *testing.T) {
 	}
 }
 
-// Sort by the name the tree shows (host suffix and parent prefix stripped), ties by full ID.
+// Sort by the name the tree shows (host suffix and parent prefix stripped), ties by full ID;
+// an ownership cycle (cyc-a/cyc-b) still lands in name order among the roots.
 func TestBuildTreeOrderUsesVisibleName(t *testing.T) {
 	r := Report{Local: Host{Host: "local", Sessions: []Row{
 		{SessionID: "id-ext", Name: "alpha-extra@local", Kind: "peer", Product: "claude-peer", Running: true},
 		{SessionID: "id-alpha", Name: "alpha@local", Kind: "peer", Product: "claude-peer"},
-		{SessionID: "lane-2", Name: "alpha@local/dev-b@local", Kind: "lane", Owner: "id-alpha", Product: "codex-peer"},
-		{SessionID: "lane-1", Name: "alpha@local/dev@local", Kind: "lane", Owner: "id-alpha", Product: "codex-peer"},
+		{SessionID: "lane-3", Name: "alpha/zed@local", Kind: "lane", Owner: "id-alpha", Product: "codex-peer"},
+		{SessionID: "lane-2", Name: "alpha/dev-b@local", Kind: "lane", Owner: "id-alpha", Product: "codex-peer"},
+		{SessionID: "lane-1", Name: "alpha/dev@local", Kind: "lane", Owner: "id-alpha", Product: "codex-peer"},
+		{SessionID: "lane-0", Name: "beta@local", Kind: "lane", Owner: "id-alpha", Product: "codex-peer"},
+		{SessionID: "cyc-b", Name: "aaa-cycle-b@local", Kind: "lane", Owner: "cyc-a", Product: "codex-peer"},
+		{SessionID: "cyc-a", Name: "aaa-cycle-a@local", Kind: "lane", Owner: "cyc-b", Product: "codex-peer"},
 		{SessionID: "dup-b", Name: "zed@local", Kind: "peer", Product: "claude-peer"},
 		{SessionID: "dup-a", Name: "zed@local", Kind: "peer", Product: "claude-peer"},
 	}}}
@@ -298,7 +304,7 @@ func TestBuildTreeOrderUsesVisibleName(t *testing.T) {
 				got = append(got, c.ID)
 			}
 		}
-		if want := []string{"id-alpha", "lane-1", "lane-2", "id-ext", "dup-a", "dup-b"}; !reflect.DeepEqual(got, want) {
+		if want := []string{"cyc-a", "cyc-b", "id-alpha", "lane-0", "lane-1", "lane-2", "lane-3", "id-ext", "dup-a", "dup-b"}; !reflect.DeepEqual(got, want) {
 			t.Fatalf("run %d: got %v want %v", i, got, want)
 		}
 	}

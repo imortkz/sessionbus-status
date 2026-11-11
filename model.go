@@ -198,14 +198,14 @@ func BuildTree(report Report, state State, now time.Time, activity, firstSeen ma
 		}
 		// Order by the name the tree shows, ties by ID: an ask or a run must not move rows
 		// (the owner mirrors this order in iTerm tabs).
+		less := func(a, b *Node, parent string) bool {
+			if ka, kb := sessionDisplayName(a, parent, tree.Host), sessionDisplayName(b, parent, tree.Host); ka != kb {
+				return ka < kb
+			}
+			return a.ID < b.ID
+		}
 		sortIDs := func(ids []string, parent string) {
-			sort.Slice(ids, func(i, j int) bool {
-				a, b := nodes[ids[i]], nodes[ids[j]]
-				if ka, kb := sessionDisplayName(a, parent, tree.Host), sessionDisplayName(b, parent, tree.Host); ka != kb {
-					return ka < kb
-				}
-				return a.ID < b.ID
-			})
+			sort.Slice(ids, func(i, j int) bool { return less(nodes[ids[i]], nodes[ids[j]], parent) })
 		}
 		visited := map[string]bool{}
 		var build func(string) *Node
@@ -235,6 +235,8 @@ func BuildTree(report Report, state State, now time.Time, activity, firstSeen ma
 				tree.Nodes = append(tree.Nodes, n)
 			}
 		}
+		// Ownership cycles are cut after the normal roots; put them back in name order.
+		sort.Slice(tree.Nodes, func(i, j int) bool { return less(tree.Nodes[i], tree.Nodes[j], "") })
 		trees = append(trees, tree)
 	}
 	applyDisplayNames(trees, false)
