@@ -196,12 +196,13 @@ func BuildTree(report Report, state State, now time.Time, activity, firstSeen ma
 				}
 			}
 		}
-		sortIDs := func(ids []string) {
+		// Order by the name the tree shows, ties by ID: an ask or a run must not move rows
+		// (the owner mirrors this order in iTerm tabs).
+		sortIDs := func(ids []string, parent string) {
 			sort.Slice(ids, func(i, j int) bool {
-				// Name order only: an ask or a run must not move rows (owner mirrors it in iTerm tabs).
 				a, b := nodes[ids[i]], nodes[ids[j]]
-				if a.Display != b.Display {
-					return a.Display < b.Display
+				if ka, kb := sessionDisplayName(a, parent, tree.Host), sessionDisplayName(b, parent, tree.Host); ka != kb {
+					return ka < kb
 				}
 				return a.ID < b.ID
 			})
@@ -214,7 +215,7 @@ func BuildTree(report Report, state State, now time.Time, activity, firstSeen ma
 			}
 			visited[id] = true
 			n := nodes[id]
-			sortIDs(children[id])
+			sortIDs(children[id], n.Name)
 			for _, c := range children[id] {
 				if child := build(c); child != nil {
 					n.Children = append(n.Children, child)
@@ -222,13 +223,13 @@ func BuildTree(report Report, state State, now time.Time, activity, firstSeen ma
 			}
 			return n
 		}
-		sortIDs(roots)
+		sortIDs(roots, "")
 		for _, id := range roots {
 			if n := build(id); n != nil {
 				tree.Nodes = append(tree.Nodes, n)
 			}
 		}
-		sortIDs(all)
+		sortIDs(all, "")
 		for _, id := range all {
 			if n := build(id); n != nil {
 				tree.Nodes = append(tree.Nodes, n)

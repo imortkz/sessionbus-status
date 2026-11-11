@@ -278,3 +278,28 @@ func TestBuildTreeOrderIgnoresAskAndRunning(t *testing.T) {
 		t.Fatalf("roots %v lanes %v", roots, lanes)
 	}
 }
+
+// Sort by the name the tree shows (host suffix and parent prefix stripped), ties by full ID.
+func TestBuildTreeOrderUsesVisibleName(t *testing.T) {
+	r := Report{Local: Host{Host: "local", Sessions: []Row{
+		{SessionID: "id-ext", Name: "alpha-extra@local", Kind: "peer", Product: "claude-peer", Running: true},
+		{SessionID: "id-alpha", Name: "alpha@local", Kind: "peer", Product: "claude-peer"},
+		{SessionID: "lane-2", Name: "alpha@local/dev-b@local", Kind: "lane", Owner: "id-alpha", Product: "codex-peer"},
+		{SessionID: "lane-1", Name: "alpha@local/dev@local", Kind: "lane", Owner: "id-alpha", Product: "codex-peer"},
+		{SessionID: "dup-b", Name: "zed@local", Kind: "peer", Product: "claude-peer"},
+		{SessionID: "dup-a", Name: "zed@local", Kind: "peer", Product: "claude-peer"},
+	}}}
+	s := State{Sessions: map[string]Record{"id-ext": {Ask: "help"}, "lane-2": {Ask: "help"}}}
+	for i := 0; i < 50; i++ {
+		var got []string
+		for _, n := range BuildTree(r, s, time.Now(), nil, nil)[0].Nodes {
+			got = append(got, n.ID)
+			for _, c := range n.Children {
+				got = append(got, c.ID)
+			}
+		}
+		if want := []string{"id-alpha", "lane-1", "lane-2", "id-ext", "dup-a", "dup-b"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("run %d: got %v want %v", i, got, want)
+		}
+	}
+}
