@@ -252,3 +252,22 @@ func TestIgnoreFlagHidesPeerAndAsk(t *testing.T) {
 		t.Fatalf("code %d output:\n%s", code, got)
 	}
 }
+
+// The fixture has the row shape of Sessionbus 0.5.16: groups, persistent and
+// permission_mode decode, and rendering does not depend on them.
+func TestFixtureRoster0516Fields(t *testing.T) {
+	report, _, _ := fixture(t)
+	rows := map[string]Row{}
+	for _, row := range report.Local.Sessions {
+		rows[row.SessionID] = row
+	}
+	if got := rows["master@laptop"].Groups; len(got) != 2 || got[0] != "bus-status" || got[1] != "session:master@laptop" {
+		t.Fatalf("peer groups: %q", got)
+	}
+	if got := rows["researcher@laptop"]; got.PermissionMode != "acceptEdits" || got.Persistent || len(got.Groups) != 1 {
+		t.Fatalf("lane: %+v", got)
+	}
+	if !rows["orphan@laptop"].Persistent {
+		t.Fatal("persistent lane not decoded")
+	}
+}

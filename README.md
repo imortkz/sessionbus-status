@@ -5,6 +5,7 @@
 [![release](https://github.com/imortkz/sessionbus-status/actions/workflows/release.yml/badge.svg)](https://github.com/imortkz/sessionbus-status/actions/workflows/release.yml)
 [![latest release](https://img.shields.io/github/v/release/imortkz/sessionbus-status?include_prereleases&sort=semver)](https://github.com/imortkz/sessionbus-status/releases)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![sessionbus: tested 0.5.12 | 0.5.16](https://img.shields.io/badge/sessionbus-tested%200.5.12%20%7C%200.5.16-brightgreen.svg)](https://github.com/antst/sessionbus)
 
 An interactive terminal tree of [Sessionbus](https://github.com/antst/sessionbus) peers and their lanes. One tab shows each session's harness, self-reported model, current activity and age, with status history or a live native log below the tree. Rows are sorted by name and never move; questions waiting for the owner are marked with a red `⚠`, an audible macOS sound and a system notification.
 
@@ -25,7 +26,7 @@ sessionbus-status --version
 
 ## Requirements
 
-- Sessionbus 0.5.12 or newer with `sessionbus roster --json`.
+- Sessionbus 0.5.12 or newer with `sessionbus roster --json`. Tested with 0.5.12 and 0.5.16.
 - Sound and notifications work on macOS only; this is a stated limitation of the repository. On Linux the TUI runs without them.
 - Optional, macOS: `brew install terminal-notifier`, then allow notifications for terminal-notifier in System Settings → Notifications. Clicking a notification opens the iTerm2 tab of the session that asked, if that session sent `tab:` (local sessions only); otherwise it brings the terminal running the TUI to the front. On the first such click macOS asks to let terminal-notifier control iTerm2 (System Settings → Privacy & Security → Automation → terminal-notifier → iTerm2). If Automation is denied, the click only brings iTerm2 to the front (when the TUI runs in iTerm2) and otherwise does nothing. Without terminal-notifier (or without notification permission for it) the built-in osascript notification is used, and clicking it opens Script Editor.
 

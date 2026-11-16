@@ -14,8 +14,13 @@
         "name": "demo-peer@laptop",
         "kind": "peer",
         "product": "claude-peer",
+        "groups": [
+          "bus-status",
+          "session:master@laptop"
+        ],
         "connected": true,
-        "running": false
+        "running": false,
+        "persistent": false
       },
       {
         "session_id": "researcher@laptop",
@@ -23,8 +28,13 @@
         "kind": "lane",
         "product": "claude-peer",
         "owner": "master@laptop",
+        "groups": [
+          "session:master@laptop"
+        ],
         "connected": true,
-        "running": false
+        "running": false,
+        "persistent": false,
+        "permission_mode": "acceptEdits"
       },
       {
         "session_id": "developer@laptop",
@@ -32,8 +42,13 @@
         "kind": "lane",
         "product": "codex-peer",
         "owner": "master@laptop",
+        "groups": [
+          "session:master@laptop"
+        ],
         "connected": true,
-        "running": true
+        "running": true,
+        "persistent": false,
+        "permission_mode": "default"
       },
       {
         "session_id": "orphan@laptop",
@@ -41,16 +56,26 @@
         "kind": "lane",
         "product": "sessionbus-dsh",
         "owner": "absent@laptop",
+        "groups": [
+          "session:absent@laptop"
+        ],
         "connected": true,
-        "running": true
+        "running": true,
+        "persistent": true,
+        "permission_mode": "default"
       },
       {
         "session_id": "bus-status@laptop",
         "name": "bus-status@laptop",
         "kind": "peer",
         "product": "bus-status",
+        "groups": [
+          "bus-status",
+          "session:bus-status@laptop"
+        ],
         "connected": true,
-        "running": false
+        "running": false,
+        "persistent": false
       }
     ]
   },
