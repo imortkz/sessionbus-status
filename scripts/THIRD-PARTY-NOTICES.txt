@@ -1,6 +1,6 @@
 Direct Go dependencies and their license notices (from the local module cache).
 
-github.com/antst/sessionbus/bus/sdk/go@v0.5.12 — MIT
+github.com/antst/sessionbus/bus/sdk/go@v0.5.16 — MIT
 
 MIT License
 
